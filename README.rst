@@ -1,9 +1,9 @@
 
 =========
-ctcsound7
+libcsound
 =========
 
-Python bindings for Csound
+Python bindings for Csound (fork of ``ctcsound``)
 
 These bindings can be used with any version of csound >= 6.18. Csound 7 is explicitely supported.
 
@@ -16,7 +16,7 @@ Csound needs to be installed in the system.
 
 .. code::
 
-	pip install ctcsound7
+	pip install libcsound
 
 
 Quick Start
@@ -27,8 +27,8 @@ Rendering in real-time using a render thread
 
 .. code-block:: python
 
-    import ctcsound7 as ct
-    csound = ct.Csound()
+	import libcsound
+    csound = libcsound.Csound()
     csound.setOption('-odac')
     csound.compileOrc(r'''
 
@@ -64,8 +64,8 @@ Render offline
 .. code-block:: python
 
 
-    import ctcsound7 as ct
-    csound = ct.Csound()
+	import libcsound
+    csound = libcsound.Csound()
     csound.setOption('-ooutfile.wav')
     csound.compileOrc(r'''
 

@@ -6,26 +6,37 @@ Introduction
 Quick Start
 -----------
 
-.. note:: *csound* should be installed before these bindings can be used
+.. note::
+
+    *csound* should be installed before these bindings can be used. Any version of csound
+    after and including ``6.18`` will work with these bindings. **csound 7** is
+    explicitely supported and should work without any changes. See `installation`_.
 
 
-Render in real-time
-^^^^^^^^^^^^^^^^^^^^
+Rendering in real-time
+^^^^^^^^^^^^^^^^^^^^^^
+
+The following example shows how to make csound generate audio in real-time.
 
 .. code-block:: python
 
-    import ctcsound7 as ct
-    csound = ct.Csound()
-    # Output to the default audio device
+    import libcsound
+
+    # Create a csound process
+    csound = libcsound.Csound()
+
+    # Output to the default audio device, using the default audio backend
     csound.setOption('-odac')
 
-    # Compile some csound code
+    # Compile some csound code. In this case just an output test, sends
+    # some pink noise to each channel, in succession.
+
     csound.compileOrc(r'''
 
     sr = 44100   ; Modify to fit your system
-    ksmps = 64
-    nchnls = 2
-    0dbfs = 1
+    ksmps = 64   ; samples per performance cycle
+    nchnls = 2   ; number of output channels
+    0dbfs = 1    ; amplitude scaling factor. Here for atavistic reasons
 
     instr 1
       kchan init -1
@@ -39,33 +50,39 @@ Render in real-time
 
     ''')
 
-    # Start csound
-    csound.start()
-
     # Creates a performance thread to be able to run csound without blocking
     # python's main thread.
     thread = csound.performanceThread()
+
+    # Start the performance
     thread.play()
 
     # Schedule an instance of instr 1 for 10 seconds
     thread.scoreEvent(0, "i", [1, 0, 10])
 
+    # This makes python wait for a key at the REPL, here to show that csound
+    # remains active even if python is blocked doing something else.
     input("Press any key to stop...\n")
-    thread.stop()
+
+    # Stop performance
+    csound.stop()
 
 
 Render offline
 ^^^^^^^^^^^^^^
 
+The same code can be run offline (non-realtime mode)
 
 .. code-block:: python
 
-    import ctcsound7 as ct
-    csound = ct.Csound()
+    import libcsound
+    csound = libcsound.Csound()
 
-    # Send output to a soundfile 'outfile.wav'. Other formats are supported: flac
-    # mp3, ogg, aiff
-    csound.setOption('-ooutfile.wav')
+    # Send output to a soundfile 'outfile.flac'. Other formats are supported: wav
+    # mp3, ogg, aiff. The corresponding --format option needs to be added, since it
+    # will not be infered from the extension.
+    csound.setOption('-ooutfile.flac --format=flac')
+
     csound.compileOrc(r'''
 
     sr = 44100
@@ -84,27 +101,26 @@ Render offline
     endin
 
     ''')
-    csound.start()
 
     # Schedule an instance of instr 1 for 10 seconds
     csound.scoreEvent("i", [1, 0, 10])
 
     # End rendering at 10 seconds. Without this the main
-    # loop keeps rendering silence
+    # loop keeps rendering silence indefinitely
     csound.setEndMarker(10)
 
     # Perform until the end of the score
-    while not csound.performKsmps():
-        pass
-
+    csound.perform()
 
 
 --------------------------
 
+.. _installation:
+
 Installation
 ------------
 
-1. **Install csound** (if not installed already)
+.. rubric:: 1. Install csound (if not installed already)
 
 For macos and windows, the recomended way to install csound is via
 the installers provided by csound itself (https://csound.com/download.html).
@@ -113,11 +129,11 @@ In linux the recommended way is to install csound via the package manager
 these cases, at the moment, this will install csound 6. Installing csound 7
 is out of the scope of this introduction
 
-2. **Install ctcsound7**
+.. rubric:: 2. Install libcsound
 
 .. code-block:: shell
 
-    pip install ctcsound7
+    pip install libcsound
 
 
 -------------------------
@@ -125,36 +141,16 @@ is out of the scope of this introduction
 Compatibility
 -------------
 
-**csound7** supports both csound 6 and csound 7 and provides a compatibility layer
-so that the same code can be used for any version of csound. In csound 7 some methods
-have been removed: these are marked clearly in the documentation. Their corresponding
-method has been kept in the csound 6 API with the indication that they need to be
-replaced with compatible alternatives in order to write future-proof code
+``libcsound`` supports both **csound 6** and **csound 7** and provides a compatibility layer
+so that **the same code can be used for any version of csound**. In csound 7 some functions
+have been removed. : these are marked clearly in the documentation. Their
+corresponding method has been kept in the csound 6 API with the indication that it needs to be
+replaced with a compatible alternative in order to write future-proof code.
 
-Some examples:
+When this package is imported, the installed csound is queried and based on
+its version the corresponding API is loaded. So whereas the different versions supported
+might differ, for the user there are very little changes. For completeness, however,
+each version has its own documentation, making it clear which methods have changed
+between versions and, particularly, how to write code which is portable across multiple versions.
 
-
-**setSpinSample**
-
-.. code-block:: python
-
-    csound = Csound()
-    ...
-    # csound 6
-    csound.addSpinSample(frame, channel, sample)
-
-    # csound 7
-    spin = csound.spin()
-    spin[nchnls * frame + channel] = sample
-
-
-**spoutSample**
-
-.. code-block:: python
-
-    # Csound 6
-    samp = csound.spoutSample(frame, channel)
-
-    # Csound 7
-    spout = csound.spout()
-    samp = spout[nchnls * frame + channel]
+For more information, see :ref:`portability`

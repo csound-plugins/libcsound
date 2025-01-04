@@ -3,9 +3,9 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ctcsound7"
-version = "0.8.0"
-description = "Python bindings to the Csound API, supporting all versions of csound higher or equal to 6.18"
+name = "libcsound"
+version = "0.9.0"
+description = "Python bindings to the Csound API, supporting all versions of csound higher or equal to 6.18, including csound 7"
 authors = [
     { name = "Eduardo Moguillansky", email = "eduardo.moguillansky@gmail.com" },
 ]
@@ -23,11 +23,11 @@ keywords = ["csound"]
 dependencies = ["numpy>=2.0"]
 
 [tool.setuptools]
-packages = ['ctcsound7']
+packages = ['libcsound']
 
 # Fix for error in uv plublish
 license-files = []
 
 
 [project.urls]
-"Homepage" = "https://github.com/csound-plugins/ctcsound7"
+"Homepage" = "https://github.com/csound-plugins/libcsound"

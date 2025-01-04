@@ -6,7 +6,7 @@ if sys.platform.startswith('win'):
     if os.path.exists('C:/Program Files/csound'):
         os.environ['PATH'] = os.environ['PATH'] + ';C:/Program Files/csound'
 
-import ctcsound7 as ct
+import libcsound
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -14,7 +14,7 @@ parser.add_argument('-o', '--outfile', default='test.wav')
 parser.add_argument('-d', '--dur', default=10, type=int)
 args = parser.parse_args()
 
-cs = ct.Csound()
+cs = libcsound.Csound()
 print(f"Csound version: {cs.version()}")
 
 cs.setOption(f"-o{args.outfile}")

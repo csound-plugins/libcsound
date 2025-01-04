@@ -1,4 +1,5 @@
-.. currentmodule:: ctcsound7.api7
+.. currentmodule:: libcsound.api7
+
 
 Csound API, version 7
 =====================
@@ -27,9 +28,10 @@ options.
 ----------------------------
 
 
-.. autoclass:: Csound
+.. autoclass:: libcsound.api7.Csound
     :members:
     :autosummary:
 
-.. autoclass:: CsoundPerformanceThread
+.. autoclass:: libcsound.api7.CsoundPerformanceThread
     :members:
+    :autosummary:

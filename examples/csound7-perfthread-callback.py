@@ -1,11 +1,11 @@
-import ctcsound7
+import libcsound
 import time
 import ctypes
 import queue
 
-assert ctcsound7.VERSION >= 7000
+assert libcsound.VERSION >= 7000
 
-cs = ctcsound7.Csound()
+cs = libcsound.Csound()
 cs.setOption('-odac')
 cs.compileOrc(r'''
 
@@ -37,10 +37,8 @@ def proc(data, q=q):
         job()
 
 
-
-cs.start()
 thread = cs.performanceThread()
-thread.setProcessCallback(proc, ctypes.c_void_p())
+thread.setProcessCallback(proc)
 thread.play()
 
 thread.scoreEvent(0, "i", [1, 0, 10])
@@ -49,6 +47,7 @@ time.sleep(1)
 q.put(lambda: cs.setControlChannel("kfreq", 800))
 
 input("key...")
+
 q.put(lambda: cs.compileOrc(r'''
 instr 3
   ifreq = p4
@@ -57,6 +56,4 @@ endin
 ''') or thread.scoreEvent(0, "i", [3, 0, 0.1, 1500]))
 
 time.sleep(3)
-
-
 thread.stop()

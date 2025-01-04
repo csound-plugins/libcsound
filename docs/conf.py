@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'ctcsound7'
+project = 'libcsound'
 copyright = '2024, Eduardo Moguillansky'
 author = 'Eduardo Moguillansky'
 
@@ -25,7 +25,7 @@ extensions = [
     'sphinx_autodoc_typehints',
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
-    'sphinx_automodapi.smart_resolver',
+    # 'sphinx_automodapi.smart_resolver',
     'autodocsumm'
 ]
 
@@ -44,7 +44,7 @@ html_static_path = ['_static']
 # Disable having a separate return type row
 napoleon_use_rtype = False
 
-typehints_fully_qualified = False
+# typehints_fully_qualified = False
 typehints_document_rtype = True
 
 # Autodoc
