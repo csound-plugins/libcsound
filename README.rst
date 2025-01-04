@@ -27,7 +27,7 @@ Rendering in real-time using a render thread
 
 .. code-block:: python
 
-	import libcsound
+    import libcsound
     csound = libcsound.Csound()
     csound.setOption('-odac')
     csound.compileOrc(r'''
@@ -63,8 +63,7 @@ Render offline
 
 .. code-block:: python
 
-
-	import libcsound
+    import libcsound
     csound = libcsound.Csound()
     csound.setOption('-ooutfile.wav')
     csound.compileOrc(r'''
