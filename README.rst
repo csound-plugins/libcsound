@@ -90,3 +90,8 @@ Render offline
     # Perform until the end of the score
     while not csound.performKsmps():
         pass
+
+Documentation
+^^^^^^^^^^^^^
+
+https://libcsound.readthedocs.io/en/latest/
