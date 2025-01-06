@@ -14,7 +14,7 @@ methods which have been discontinued in csound 7 are marked in the documentation
 
 .. autosummary::
     Csound
-    CsoundPerformanceThread
+    PerformanceThread
 
 
 -------------------------
@@ -25,6 +25,6 @@ methods which have been discontinued in csound 7 are marked in the documentation
   :autosummary:
 
 
-.. autoclass:: libcsound.api6.CsoundPerformanceThread
+.. autoclass:: libcsound.api6.PerformanceThread
   :members:
   :autosummary:

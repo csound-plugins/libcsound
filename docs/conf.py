@@ -40,6 +40,12 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 html_theme = 'sphinx_book_theme'
 html_static_path = ['_static']
 
+html_theme_options = {
+    "show_navbar_depth": 3,
+    "max_navbar_depth": 5,
+    "show_toc_level": 2
+}
+
 
 # Disable having a separate return type row
 napoleon_use_rtype = False
@@ -48,7 +54,7 @@ napoleon_use_rtype = False
 typehints_document_rtype = True
 
 # Autodoc
-autodoc_member_order = 'bysource'
+# autodoc_member_order = 'bysource'
 
 
 html_css_files = [

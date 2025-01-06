@@ -103,6 +103,19 @@ def defaultRealtimeModule() -> str:
     return 'pa_cb'
 
 
+def realtimeModulesForPlatform(platform='') -> set[str]:
+    if not platform:
+        platform = sys.platform
+    if platform == 'linux':
+        return {'portaudio', 'jack', 'pulse', 'alsa'}
+    elif platform == 'darwin':
+        return {'portaudio', 'auhal', 'jack'}
+    elif platform == 'windows':
+        return {'portaudio', 'winmme'}
+    else:
+        return {}
+
+
 def testCsound(module: str = '',
                sr: float = 0.,
                outdev='',

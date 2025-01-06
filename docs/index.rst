@@ -18,7 +18,7 @@ corresponding API is imported at runtime based on csound's version)
 
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
 
     introduction
     csound6

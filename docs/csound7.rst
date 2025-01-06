@@ -22,7 +22,7 @@ options.
 
 .. autosummary::
     Csound
-    CsoundPerformanceThread
+    PerformanceThread
 
 
 ----------------------------
@@ -32,6 +32,6 @@ options.
     :members:
     :autosummary:
 
-.. autoclass:: libcsound.api7.CsoundPerformanceThread
+.. autoclass:: libcsound.api7.PerformanceThread
     :members:
     :autosummary:
