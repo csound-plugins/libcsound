@@ -24,3 +24,4 @@ corresponding API is imported at runtime based on csound's version)
     csound6
     csound7
     porting
+    notebooks

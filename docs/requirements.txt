@@ -5,3 +5,4 @@ autodocsumm
 sphinxawesome-theme
 sphinx-design
 sphinx-book-theme
+nbsphinx

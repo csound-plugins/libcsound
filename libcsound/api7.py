@@ -1058,11 +1058,11 @@ class Csound:
         """
         if not self._started:
             self.start()
-        while (retcode := self.performKsmps()) == CSOUND_SUCCESS:
-            pass
-        if retcode == CSOUND_SUCCESS:
-            return 1
-        return -1
+        while True:
+            retcode = self.performKsmps()
+            if retcode != CSOUND_SUCCESS:
+                break
+        return 1
 
     def performKsmps(self) -> bool:
         """

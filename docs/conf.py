@@ -26,7 +26,8 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
     # 'sphinx_automodapi.smart_resolver',
-    'autodocsumm'
+    'autodocsumm',
+    'nbsphinx',
 ]
 
 templates_path = ['_templates']

@@ -1,6 +1,5 @@
 import libcsound
 import time
-import ctypes
 import queue
 
 assert libcsound.VERSION >= 7000
@@ -27,13 +26,10 @@ instr 2
 endin
 ''')
 
-q = queue.Queue()
+q = queue.SimpleQueue()
 
 def proc(data, q=q):
-    if q.empty():
-        return
-    job = q.get(block=False)
-    if job:
+    if not q.empty() and (job := q.get(block=False)):
         job()
 
 
@@ -48,12 +44,16 @@ q.put(lambda: cs.setControlChannel("kfreq", 800))
 
 input("key...")
 
+# Test that we can compile and schedule an instrument immediately
 q.put(lambda: cs.compileOrc(r'''
 instr 3
   ifreq = p4
   outch 2, oscili(0.1, ifreq)
 endin
-''') or thread.scoreEvent(0, "i", [3, 0, 0.1, 1500]))
+'''))
+# If we run .scoreEvent directly we might be faster than the
+# compile action and instr 3 would be unknown
+q.put(lambda: thread.scoreEvent(0, "i", [3, 0, 0.1, 1500]))
 
 time.sleep(3)
 thread.stop()

@@ -3916,7 +3916,7 @@ class PerformanceThread:
         """Starts recording the output from Csound.
 
          Args:
-             filename: the output soundfile
+             filename: the output soundfile. Format is always WAVE
              samplebits: number of bits per sample (16, 24, 32)
              numbufs: number of buffers
 
