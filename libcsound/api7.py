@@ -194,8 +194,8 @@ def _declareAPI(libcsound, libcspt):
     libcsound.csoundStart.argtypes = [CSOUND_p]
     libcsound.csoundPerformKsmps.restype = ct.c_int32
     libcsound.csoundPerformKsmps.argtypes = [CSOUND_p]
-    libcsound.csoundPerform.restype = ct.c_int32
-    libcsound.csoundPerform.artypes = [CSOUND_p]
+    # libcsound.csoundPerform.restype = ct.c_int32
+    # libcsound.csoundPerform.artypes = [CSOUND_p]
     libcsound.csoundRunUtility.restype = ct.c_int32
     libcsound.csoundRunUtility.argtypes = [CSOUND_p, ct.c_char_p, ct.c_int32, ct.POINTER(ct.c_char_p)]
     libcsound.csoundReset.argtypes = [CSOUND_p]
@@ -805,10 +805,13 @@ class Csound:
 
     def compileOrc(self, orc: str, block=True) -> int:
         """
-        Parses and compiles the given orchestra from an ASCII string.
+        Parses and compiles the given orchestra from a string.
 
         Args:
             orc: the code to compile
+            block: if True, any global code will be evaluated in synchronous
+                mode. Otherwise, this methods returns immediately but any
+                global code passed to csound might not still be available
 
         Returns:
             0 if OK, an error code otherwise
@@ -890,9 +893,9 @@ class Csound:
 
         Returns a non-zero error code on failure.
 
-        If start is called before this method, the <CsOptions>
+        If start is called before this method, the ``<CsOptions>``
         element is ignored (but setOption can be called any number of
-        times), the <CsScore> element is not pre-processed, but dispatched as
+        times), the ``<CsScore>`` element **is not pre-processed**, but dispatched as
         real-time events; and performance continues indefinitely, or until
         ended by calling stop or some other logic. In this "real-time"
         mode, the sequence of calls should be:
@@ -901,10 +904,11 @@ class Csound:
 
         .. code-block:: python
 
+            cs = Csound()
             cs.setOption(...)
             cs.start()
             cs.compileCsd(path)
-            while not cs.performKsmps():
+            while cs.performKsmps() == CSOUND_SUCCESS:
                 pass
             cs.reset()
 
@@ -913,20 +917,19 @@ class Csound:
             this function can be called repeatedly during performance to
             replace or add new instruments and events.
 
-        But if this method is called before start, the <CsOptions>
-        element is used, the <CsScore> section is pre-processed and dispatched
-        normally, and performance terminates when the score terminates, or
-        stop is called. In this "non-real-time" mode (which can still
-        output real-time audio and handle real-time events), the sequence of
-        calls should be:
+        But if this method is called before start, the ``<CsOptions>``
+        element is used, the ``<CsScore>`` section **is pre-processed and dispatched
+        normally**, and performance terminates when the score terminates, or
+        stop is called.
 
         .. rubric:: Example
 
         .. code-block:: python
 
+            cs = Csound()
             cs.compileCsd(path)
             cs.start()
-            while not cs.performKsmps():
+            while cs.performKsmps() == CSOUND_SUCCESS:
                 pass
             cs.reset()
 
@@ -944,9 +947,9 @@ class Csound:
             non-zero error code on failure.
 
         If start is called before this method, the ``<CsOptions>``
-        element is ignored (but setOption can be called any number of
-        times), the ``<CsScore>`` element is not pre-processed, but dispatched as
-        real-time events; and performance continues indefinitely, or until
+        element **is ignored** (but :py:meth:`setOption()` can be called any number of
+        times), the ``<CsScore>`` element **is not pre-processed**, but *dispatched as
+        real-time events*; and **performance continues indefinitely**, or until
         ended by calling stop or some other logic. In this "real-time"
         mode, the sequence of calls should be:
 
@@ -964,12 +967,10 @@ class Csound:
             This function can be called repeatedly during performance to
             replace or add new instruments and events.
 
-        But if this method is called before start, the <CsOptions>
-        element is used, the <CsScore> section is pre-processed and dispatched
-        normally, and performance terminates when the score terminates, or
-        stop is called. In this "non-real-time" mode (which can still
-        output real-time audio and handle real-time events), the sequence of
-        calls should be:
+        But if this method is called before start, the ``<CsOptions>``
+        element is used, the ``<CsScore>`` section **is pre-processed and dispatched
+        normally**, and performance terminates when the score terminates, or
+        stop is called.
 
         .. code-block:: python
 
@@ -1036,7 +1037,7 @@ class Csound:
         calling :py:meth:`stop()` from another thread (zero return value).
 
         Returns:
-            0 if OK, an error code otherwise
+            0 if stopped, 1 if end of score is reached, negative on error
 
         Note that some form of compilation needs to happen before
         (:py:meth:`compileCommandLine()`, :py:meth:`compileOrc()`,
@@ -1047,10 +1048,21 @@ class Csound:
         In the case of zero return value, :py:meth:`perform()` can be called
         again to continue the stopped performance. Otherwise, :py:meth:`reset()`
         should be called to clean up after the finished or failed performance.
+
+        .. note::
+
+            The underlying function ``csoundPerform`` has been removed from the
+            API in csound 7. This method is included here for backwards compatibility
+            with csound 6 and might be removed in the future.
+
         """
         if not self._started:
             self.start()
-        return libcsound.csoundPerform(self.cs)
+        while (retcode := self.performKsmps()) == CSOUND_SUCCESS:
+            pass
+        if retcode == CSOUND_SUCCESS:
+            return 1
+        return -1
 
     def performKsmps(self) -> bool:
         """

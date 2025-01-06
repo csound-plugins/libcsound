@@ -10,9 +10,11 @@ Deprecated methods in csound 6
 These methods do not exist in csound 7 but code can be written which supports the same
 functionality
 
+spin / spout
+~~~~~~~~~~~~
 
-setSpinSample and addSpinSample
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**setSpinSample and addSpinSample**
 
 .. code-block:: python
 
@@ -26,8 +28,7 @@ setSpinSample and addSpinSample
     spin[nchnls * frame + channel] = sample
 
 
-spoutSample
-~~~~~~~~~~~
+**spoutSample**
 
 .. code-block:: python
 
@@ -39,8 +40,7 @@ spoutSample
     samp = spout[nchnls * frame + channel]
 
 
-clearSpin
-~~~~~~~~~
+**clearSpin**
 
 .. code-block:: python
 

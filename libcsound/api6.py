@@ -660,11 +660,15 @@ class Csound:
         .. code-block:: python
 
             cs = Csound()
+            cs.setOption(...)
             cs.compileOrc(r'''
             instr 1
                 a1 rand 0dbfs/4
                 out a1
             endin
+            cs.scoreEvent(...)
+            cs.perform()
+
             ''')
 
         """
@@ -873,12 +877,8 @@ class Csound:
         """
         Handles input events and performs audio output.
 
-        This is done until the end of score is reached (positive return value),
-        an error occurs (negative return value), or performance is stopped by
-        calling :py:meth:`stop()` from another thread (zero return value).
-
         Returns:
-            0 if OK, an error code otherwise
+            0 if stopped, 1 if end of score is reached, negative on error
 
         Note that some form of compilation needs to happen before
         (:py:meth:`compileCommandLine()`, :py:meth:`compileOrc()`,
