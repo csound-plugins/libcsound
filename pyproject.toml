@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "libcsound"
-version = "0.9.0"
+version = "0.9.1"
 description = "Python bindings to the Csound API, supporting all versions of csound higher or equal to 6.18, including csound 7"
 authors = [
     { name = "Eduardo Moguillansky", email = "eduardo.moguillansky@gmail.com" },
@@ -20,7 +20,7 @@ classifiers = [
 requires-python = ">=3.9"
 keywords = ["csound"]
 
-dependencies = ["numpy>=2.0"]
+dependencies = ["numpy"]
 
 [tool.setuptools]
 packages = ['libcsound']

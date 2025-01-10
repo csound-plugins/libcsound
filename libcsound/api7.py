@@ -582,7 +582,7 @@ class Csound:
         """
         return libcsound.csoundSetGlobalEnv(cstring(name), cstring(value) if value is not None else ct.c_char_p())
 
-    def setOption(self, option: str):
+    def setOption(self, option: str) -> int:
         """
         Set csound option/options
 
@@ -590,9 +590,11 @@ class Csound:
             option: a command line option passed to the csound process. Any number
                 of options can be passed at once, separated by whitespace
 
-        This needs to be called before any code is compiled.
-        Multiple options are allowed in one string.
-        Returns zero on success.
+        Returns:
+            zero on success, an error code otherwise
+
+        **Options can only be set before the csound process is started**. Multiple
+        options are allowed in one string.
         """
         if self._compilationStarted:
             raise RuntimeError(f"Cannot set options once code has already been compiled")
@@ -889,16 +891,19 @@ class Csound:
 
     def compileCsd(self, path: str) -> int:
         """
-        Compiles a Csound input file (.csd file) or a text string.
+        Compiles a Csound input file (.csd file)
 
         Returns a non-zero error code on failure.
 
-        If start is called before this method, the ``<CsOptions>``
-        element is ignored (but setOption can be called any number of
+        If :py:meth:`start()` is called before this method, the ``<CsOptions>``
+        element is ignored (but :py:meth:`setOption()` can be called any number of
         times), the ``<CsScore>`` element **is not pre-processed**, but dispatched as
         real-time events; and performance continues indefinitely, or until
-        ended by calling stop or some other logic. In this "real-time"
-        mode, the sequence of calls should be:
+        ended by calling stop or some other logic.
+
+        .. note::
+            this function can be called repeatedly during performance to
+            replace or add new instruments and events.
 
         .. rubric:: Example
 
@@ -906,29 +911,24 @@ class Csound:
 
             cs = Csound()
             cs.setOption(...)
-            cs.start()
-            cs.compileCsd(path)
+            cs.start()   # <---- start before compile, options in compiled code will be ignored
+            cs.compileCsd("/path/to/my.csd")
             while cs.performKsmps() == CSOUND_SUCCESS:
                 pass
             cs.reset()
-
-
-        .. note::
-            this function can be called repeatedly during performance to
-            replace or add new instruments and events.
 
         But if this method is called before start, the ``<CsOptions>``
         element is used, the ``<CsScore>`` section **is pre-processed and dispatched
         normally**, and performance terminates when the score terminates, or
         stop is called.
 
-        .. rubric:: Example
-
         .. code-block:: python
 
             cs = Csound()
-            cs.compileCsd(path)
-            cs.start()
+            cs.setOption(...)
+            # No start, the <CsOption> section is honoured
+            cs.compileCsd("/path/to/my.csd")
+            # .start is called internally before performKsmps,
             while cs.performKsmps() == CSOUND_SUCCESS:
                 pass
             cs.reset()
@@ -946,12 +946,20 @@ class Csound:
         Returns:
             non-zero error code on failure.
 
-        If start is called before this method, the ``<CsOptions>``
+        If :py:meth:`start()` is called before this method, the ``<CsOptions>``
         element **is ignored** (but :py:meth:`setOption()` can be called any number of
         times), the ``<CsScore>`` element **is not pre-processed**, but *dispatched as
         real-time events*; and **performance continues indefinitely**, or until
-        ended by calling stop or some other logic. In this "real-time"
-        mode, the sequence of calls should be:
+        ended by calling stop or some other logic.
+
+        .. note::
+
+            This function can be called repeatedly during performance to
+            replace or add new instruments and events.
+
+        .. rubric:: Example
+
+        .. code-block:: python
 
             >>> from libcsound import *
             >>> cs = Csound()
@@ -962,18 +970,14 @@ class Csound:
             ...     pass
             >>> cs.reset()
 
-        .. note::
-
-            This function can be called repeatedly during performance to
-            replace or add new instruments and events.
-
-        But if this method is called before start, the ``<CsOptions>``
+        But if this method is called before :py:meth:`start()`, the ``<CsOptions>``
         element is used, the ``<CsScore>`` section **is pre-processed and dispatched
         normally**, and performance terminates when the score terminates, or
         stop is called.
 
         .. code-block:: python
 
+            ...
             cs.compileCsdText(code)
             cs.start()
             while not cs.performKsmps():
@@ -993,11 +997,12 @@ class Csound:
         case score preprocessing is performed and performance terminates
         when the score terminates.
 
-        However, if called before compiling a csd file or an orc file,
-        score preprocessing is not performed and "i" statements are dispatched
-        as real-time events. In this case, any options given as part of
-        a ``<CsOptions>`` tag are ignored (options can only be set prior to
-        starting the csound process).
+        However, **if called before compiling any csound code** (either by
+        compiling a csd file or orc code), score preprocessing is not
+        performed and "i" statements are dispatched as real-time events.
+        In this case, any options given as part of the ``<CsOptions>``
+        section are ignored: **options can only be set prior to
+        starting the csound process**
 
         .. note::
 
@@ -1583,37 +1588,57 @@ class Csound:
         """
         Returns a list of allocated channels and an error message.
 
-        A ControlChannelInfo object contains the channel characteristics.
+        .. note::
+            This is a low-level function, kept here for completion and compatibility
+            with csound 6. To list all allocated channels in a more ergonomic way
+            see :py:meth:`allocatedChannels()`
+
+        A :class:`ControlChannelInfo` object contains the channel characteristics.
         The error message indicates if there is not enough
         memory for allocating the list or it is an empty string if there is no
         error. In the case of no channels or an error, the list is None.
 
-        Notes: the caller is responsible for freeing the list returned by the
-        C API with delete_channel_list(). The name pointers may become
-        invalid after calling reset().
+        .. note::
+
+            The caller is responsible for freeing the list returned by the
+            C API with :py:meth:`deleteChannelList()`. The name pointers may become
+            invalid after calling reset().
+
+        .. seealso:: :py:meth:`allocatedChannels()`
         """
-        chn_infos = None
-        err = ''
         ptr = ct.cast(ct.POINTER(ct.c_int)(), ct.POINTER(ControlChannelInfo))
         n = libcsound.csoundListChannels(self.cs, ct.byref(ptr))
-        if n == CSOUND_MEMORY :
-            err = 'There is not enough memory for allocating the list'
         if n > 0:
-            chn_infos = ct.cast(ptr, ct.POINTER(ControlChannelInfo * n)).contents
-        return chn_infos, err
+            return ct.cast(ptr, ct.POINTER(ControlChannelInfo * n)).contents, ''
+        if n == CSOUND_MEMORY :
+            return None, 'There is not enough memory for allocating the list'
+        else:
+            return None, 'Unknown error'
 
     def deleteChannelList(self, lst: ct.Array[ControlChannelInfo]) -> None:
         """Releases a channel list previously returned by list_channels()."""
         ptr = ct.cast(lst, ct.POINTER(ControlChannelInfo))
         libcsound.csoundDeleteChannelList(self.cs, ptr)
 
-    def setControlChannelHints(self, name: str, hints: ControlChannelHints):
+    def setControlChannelHints(self,
+                               name: str,
+                               hints: ControlChannelHints | None = None,
+                               behav: int = 0,
+                               dflt: float = 0.01,
+                               min: float = 0.,
+                               max: float = 1.,
+                               x: int = 0,
+                               y: int = 0,
+                               width: int = 0,
+                               height: int = 0,
+                               attributes: str | None = None) -> None:
         """
-        Sets parameters hints for a control channel.
-
         Args:
             name: name of the channel
-            hints: the hints to set
+            hints: the hints to set. If None, a hints structure will be constructed with
+                the named arguments. If given, any other settings (min, max, x, ...) will
+                be ignored
+            behav:
 
         Returns:
             CSOUND_SUCCSESS (0) if ok, CSOUND_ERROR if the channel does not exist,
@@ -1625,6 +1650,8 @@ class Csound:
         structure for details.
 
         """
+        if hints is None:
+            hints = ControlChannelHints(behav=behav, dflt=dflt, min=min, max=max, x=x, y=y, width=width, height=height, attributes=attributes)
         return libcsound.csoundSetControlChannelHints(self.cs, cstring(name), hints)
 
     def controlChannelHints(self, name: str) -> tuple[ControlChannelHints | None, int]:
@@ -2598,6 +2625,7 @@ class PerformanceThread:
         self._setProcessCallback(self._processQueueCallback)
 
     def _processQueueCallback(self, data) -> None:
+        return
         assert self._processQueue is not None
         N = self._processQueue.qsize()
         if N > 0:
