@@ -2625,7 +2625,6 @@ class PerformanceThread:
         self._setProcessCallback(self._processQueueCallback)
 
     def _processQueueCallback(self, data) -> None:
-        return
         assert self._processQueue is not None
         N = self._processQueue.qsize()
         if N > 0:

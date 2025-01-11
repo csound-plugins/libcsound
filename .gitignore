@@ -11,3 +11,4 @@ test/*.ogg
 test/*.flac
 uv.lock
 pyrightconfig.json
+docs/notebooks/Untitled*.ipynb
