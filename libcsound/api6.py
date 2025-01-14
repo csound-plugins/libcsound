@@ -2432,7 +2432,10 @@ class Csound:
 
         The event is inserted at absolute time with respect to the start of
         performance, or from an offset set with timeOffset.
+
+        .. note:: This method is not present in csound 7. Use
         """
+        _notPresentInCsound7()
         p = np.asarray(pfields, dtype=MYFLT)
         ptr = p.ctypes.data_as(ct.POINTER(MYFLT))
         numFields = ct.c_long(p.size)

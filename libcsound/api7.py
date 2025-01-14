@@ -132,6 +132,52 @@ CSOUNDPERFTHREAD_p = ct.c_void_p
 PROCESSFUNC = ct.CFUNCTYPE(None, ct.c_void_p)
 
 
+# class CsType
+#     """
+#     typedef struct cstype {
+#         char* varTypeName;
+#         char* varDescription;
+#         int32_t argtype; // used to denote if allowed as in-arg, out-arg, or both
+#         struct csvariable* (*createVariable)(void *cs, void *p, struct opds *ctx);
+#         void (*copyValue)(CSOUND* csound, const struct cstype* cstype, void* dest, const
+#                           void* src, struct opds *ctx);
+#         void (*freeVariableMemory)(void* csound, void* varMem);
+#         CONS_CELL* members;
+#         int32_t userDefinedType;
+#       } CS_TYPE;
+#     """
+#     _fields_ = [
+#         ("varTypeName", ct.c_char_p),
+#         ("varDescription", ct.c_char_p),
+#         ("argtype", ct.c_int32),
+#         ("createVariable", ct.c_void_p),
+#         ("copyValue", ct.c_void_p),
+#         ("freeVariableMemory", ct.c_void_p),
+#         ("members", ct.c_void_p),
+#         ("userDefinedType", ct.c_int32)
+#     ]
+
+# class ArrayDat(ct.Structure):
+#     """
+#     struct arraydat {
+#       int32_t dimensions;             /* number of array dimensions */
+#       int32_t *sizes;                 /* size of each dimensions */
+#       int32_t arrayMemberSize;        /* size of each item */
+#       const struct cstype *arrayType; /* type of array */
+#       MYFLT *data;                    /* data */
+#       size_t allocated;               /* size of allocated data */
+#     };
+#     """
+#     _fields_ = [
+#         ("dimensions", ct.c_int32),
+#         ("sizes", ct.POINTER(ct.c_int32)),
+#         ("arrayMemberSize", ct.c_int32),
+#         ("arrayType", ct.POINTER(CsType)),
+#         ("data", ct.POINTER(MYFLT)),
+#         ("allocated", ct.c_size_t)
+#     ]
+
+
 def _declareAPI(libcsound, libcspt):
     # Instantiation
     libcsound.csoundInitialize.restype = ct.c_int32
@@ -1289,8 +1335,8 @@ class Csound:
         This callback can be set for --realtime mode.
         This callback is cleared after reset.
         """
-        self._messageStringCallback = MSGSTRFUNC(function)
-        libcsound.csoundSetMessageStringCallback(self.cs, ct.c_int32(attr), self._messageStringCallback)
+        self._callbacks['messageString'] = func = MSGSTRFUNC(function)
+        libcsound.csoundSetMessageStringCallback(self.cs, ct.c_int32(attr), func)
 
     def createMessageBuffer(self, echo=False) -> None:
         """
@@ -1381,17 +1427,27 @@ class Csound:
                 channel declared as input ('r') will read information from the host,
                 a channel declared as output ('w') will write information to the host.
 
-        If the channel is a control or an audio channel, the pointer is
-        translated to an ``ndarray`` of MYFLT (float64 in all major desktop platforms).
-        If the channel is a string channel, the pointer is casted to :code:`ct.c_char_p`.
+        Returns:
+            a tuple (pointer, errormsg)
+
+        ==============  ====================
+        Channel Kind    Returned Pointer
+        ==============  ====================
+        control         numpy array, float64, size 1
+        audio           numpy array, float64, size ``ksmps``
+        string          ctypes.c_char_p
+        pvs             ctypes.c_void_p
+        array           numpy array, float64 (arbitrary shape)
+        ==============  ====================
+
         The error message is either an empty string or a string describing the error.
 
         The channel is created first if it does not exist yet.
 
         If the channel already exists, it must match the data type
-        (control, audio, or string), however, the mode bits are
-        OR'd with the new value, meaning that a channel declared in csound
-        as input can be made to be input+output if called with 'rw' as mode.
+        (control, audio, or string). The mode bits are
+        OR'd with the new value, meaning that **a channel declared in csound
+        as input can be made to be input+output if called with 'rw' as mode**.
 
         .. note::
 
@@ -1509,6 +1565,7 @@ class Csound:
             if chan_type == CSOUND_STRING_CHANNEL:
                 return ct.cast(ptr, STRINGDAT_p), err
             elif chan_type == CSOUND_ARRAY_CHANNEL:
+                # TODO: cast to a numpy array
                 return ct.cast(ptr, ARRAYDAT_p), err
             elif chan_type == CSOUND_PVS_CHANNEL:
                 return ct.cast(ptr, PVSDAT_p), err
@@ -2123,10 +2180,10 @@ class Csound:
         not known).
         """
         if typemask == CSOUND_CALLBACK_KBD_EVENT:
-            self._callbacks['keyboard_cb_event'] = KEYBOARDFUNC(function)
+            self._callbacks['keyboardEvent'] = func = KEYBOARDFUNC(function)
         else:
-            self._callbacks['keyboard_cb_text'] = KEYBOARDFUNC(function)
-        return libcsound.csoundRegisterKeyboardCallback(self.cs, KEYBOARDFUNC(function), ct.py_object(userdata), ct.c_uint(typemask))
+            self._callbacks['keyboardText'] = func = KEYBOARDFUNC(function)
+        return libcsound.csoundRegisterKeyboardCallback(self.cs, func, ct.py_object(userdata), ct.c_uint(typemask))
 
     def removeKeyboardCallback(self, function):
         """Removes a callback previously set with register_keyboard_callback()."""
@@ -2295,7 +2352,7 @@ class Csound:
 
     def setMakeGraphCallback(self, function) -> None:
         """Called by external software to set Csound's MakeGraph function."""
-        self._callbacks['setMakeGraph'] = f = MAKEGRAPHFUNC(function)
+        self._callbacks['makeGraph'] = f = MAKEGRAPHFUNC(function)
         libcsound.csoundSetMakeGraphCallback(self.cs, f)
 
     def setDrawGraphCallback(self, function) -> None:
@@ -2437,7 +2494,7 @@ class Csound:
         Pass None to disable the callback.
         This callback is retained after a reset() call.
         """
-        self._callbacks['openFileCallback'] = f = OPENFILEFUNC(function)
+        self._callbacks['openFile'] = f = OPENFILEFUNC(function)
         libcsound.csoundSetOpenFileCallback(self.cs, f)
 
     def getOpcodes(self) -> list[OpcodeDef]:
