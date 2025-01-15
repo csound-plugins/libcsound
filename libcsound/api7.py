@@ -5,6 +5,7 @@ import numpy as np
 import warnings
 import ctypes as ct
 import queue as _queue
+from collections import deque as _deque
 import threading as _threading
 
 from .common import *
@@ -502,13 +503,9 @@ class Csound:
         """
         return self.cs
 
-    def performanceThread(self, withProcessQueue=False) -> PerformanceThread:
+    def performanceThread(self) -> PerformanceThread:
         """
         Creates a performance thread attached to this csound instance
-
-        Args:
-            withProcessQueue: if True, the performance thread is started with
-                a process queue set up. See :meth:`~PerformanceThread.setProcessQueue`
 
         Returns:
             the created performance thread object
@@ -539,7 +536,7 @@ class Csound:
 
         """
         if self._perfthread is None:
-            self._perfthread = PerformanceThread(self, withProcessQueue=withProcessQueue)
+            self._perfthread = PerformanceThread(self)
         return self._perfthread
 
     #
@@ -918,7 +915,7 @@ class Csound:
 
     def evalCode(self, code: str) -> float:
         """
-        Parses and compiles an orchestra given on an string, synchronously.
+        Evaluate the given code (blocking), returns the value passed to the ``return`` opcode
 
         Args:
             code: the code to evaluate. This code is evaluated at the global space
@@ -940,9 +937,9 @@ class Csound:
         .. note::
 
             Calling this method while csound is run in realtime via a performance
-            thread might incur in high latency. To avoid this, create
-            the performance thread with a process queue (``withProcessQueue=True``)
-            and call :meth:`PerformanceThread.evalCode`
+            thread might incur in high latency. To avoid this, call the
+            :meth:`~PerformanceThread.evalCode` method on the performance
+            thread
         """
         return libcsound.csoundEvalCode(self.cs, cstring(code))
 
@@ -1788,11 +1785,14 @@ class Csound:
             ...
             # This will create the channel if it does not exist already
             cs.setControlChannel('foo', 10)
-            thread = cs.performanceThread(withProcessQueue=True)
+
+            # To modify a control channel with low latency use a performance thread
+            thread = cs.performanceThread()
+            thread.play()
 
             # At some point, change the value with a thread task. This takes effect
             # in the next cycle
-            thread.task(lambda cs: cs.setControlChannel('foo', 20))
+            thread.requestCallback(lambda csound: csound.setControlChannel('foo', 20))
 
         """
         libcsound.csoundSetControlChannel(self.cs, cstring(name), MYFLT(val))
@@ -2595,11 +2595,6 @@ class PerformanceThread:
 
     Args:
         csound: the Csound instance managed by this thread
-        withProcessQueue: if True, set up a process queue to manage tasks to be
-            fired within the performance loop. This is useful if access to the
-            csound API is needed during a performance (code compilation, table
-            access, etc), since when a performance thread is active any access to
-            the API can result in high latency
 
     .. seealso:: :meth:`Csound.performanceThread`
 
@@ -2628,7 +2623,7 @@ class PerformanceThread:
         perfthread.join()
 
     """
-    def __init__(self, csound: Csound, withProcessQueue=False):
+    def __init__(self, csound: Csound):
         if csound._perfthread is not None:
             raise RuntimeError(f"A Csound instance can only have one attached performance "
                                f"thread, but {csound} already has one: {csound._perfthread}")
@@ -2637,9 +2632,10 @@ class PerformanceThread:
         self._processCallback: tuple[ct._FuncPointer, _t.Any] | None = None
         self._processQueue: _queue.SimpleQueue | None = None
         self._status = 'paused'
-        self._futureCallbacks = []
-        if withProcessQueue:
-            self.setProcessQueue()
+        # Used to hold a reference to functions passed to requestCallback.
+        # We only need to hold the reference until the next cycle, so the maxlen
+        # is a maximum of callbacks which can be processed per cycle
+        self._futureCallbacks = _deque(maxlen=1000)
 
     def __del__(self):
         libcspt.csoundDestroyPerformanceThread(self.cpt)
@@ -2701,33 +2697,28 @@ class PerformanceThread:
                 job = self._processQueue.get_nowait()
                 job(self.csound)
 
-    # def compile(self, code: str) -> None:
-    #     """
-    #     Compile orchestra code via the process queue
-
-    #     Args:
-    #         code: code to send to the running csound instance
-
-    #     When using a performance thread, any access to the API can only happen
-    #     after a buffer has been performed, resulting in added latency.
-    #     To solve this, the performance thread provides a process callback, which
-    #     is fired at each cycle. This method uses that callback to schedule
-    #     a compilation action
-    #     """
-    #     if self._processQueue is None:
-    #         raise RuntimeError("This action needs the process queue, start it via "
-    #                            "the setProcessQueue method")
-    #     assert self._processQueue is not None
-    #     self._processQueue.put_nowait(lambda cs: cs.compileOrc(code))
-
     def requestCallback(self, callback: _t.Callable[[PerformanceThread], None]) -> None:
         """
         Calls the given callback within the performance loop
 
         Args:
-            callback: function of the form ``(PerformanceThread) -> None``. Can
+            callback: function of the form ``(Csound) -> None``. Can
                 access the :class:`Csound` instance through the :py:attr:`csound`
                 attribute
+
+        The main advantage of using this method instead of accessing the API
+        directly via the :class:`Csound` object is that, when csound is run
+        with a performance thread, any direct access to the API can result in
+        extra long latency.
+
+        .. note::
+
+            This method was introduced in csound >= 7.0. In csound 6 a similar
+            effect can be achieved by setting a process queue (see :py:meth:`setProcessQueue`)
+            and calling :py:meth:`processQueueTask`
+
+        To pass extra arguments to the callback you can use early binding (see
+        the example)
 
         .. rubric:: Example
 
@@ -2744,8 +2735,8 @@ class PerformanceThread:
 
             # Get a pointer to it, as an alternative to csound.table(...)
             q = queue.SimpleQueue()
-            def func(pt, q=q):
-                tabnum = int(pt.csound.evalCode('return gi__tab1'))
+            def func(csound, q=q):
+                tabnum = int(csound.evalCode('return gi__tab1'))
                 q.put((tabnum, pt.csound.table(tabnum)))
             thread.requestCallback(func)
             # This blocks until the callback has been called
@@ -2754,8 +2745,8 @@ class PerformanceThread:
         .. seealso:: :py:meth:`evalCode`
 
         """
-        def _func(pt, cb=callback):
-            cb(self)
+        def _func(pt, cb=callback, cs=self.csound):
+            cb(cs)
         func = REQUESTCALLBACKFUNC(_func)
         libcspt.csoundPerformanceThreadRequestCallback(self.cpt, func)
         self._futureCallbacks.append(func)
@@ -2776,6 +2767,10 @@ class PerformanceThread:
         Returns:
             the evaluated value if callback was not given, 0. otherwise
 
+        .. note::
+
+            This method was introduced in csound >= 7.0.
+
         .. rubric:: Example
 
         Allocate an empty table, return the table number. This will block for at least the
@@ -2787,7 +2782,7 @@ class PerformanceThread:
 
             csound = Csound()
             csound.compileOrc(...)
-            thread = csound.performanceThread(withProcessQueue=True)
+            thread = csound.performanceThread()
             tabnum = thread.evalCode(r'''
             gi__tabnum ftgen 0, 0, 1024, -2, 0
             return gi__tabnum
@@ -2808,27 +2803,19 @@ class PerformanceThread:
             libcspt.csoundPerformanceThreadEvalCode(self.cpt, cstring(code), callback)
             return q.get(timeout=timeout)
 
-        # if not callback:
-        #     q = _queue.SimpleQueue()
-        #     def func(cs, q=q):
-        #         q.put(cs.evalCode(code))
-        #     self.task(func)
-        #     return q.get(timeout=timeout)
-        # else:
-        #     self.task(lambda cs, func=callback: func(cs.evalCode(code)))
-        #     return 0.
-
-    def queueTask(self, func: _t.Callable[[Csound], None]) -> None:
+    def processQueueTask(self, func: _t.Callable[[Csound], None]) -> None:
         """
         Add a task to the process queue, to be picked up by the process callback
 
         Args:
-            func: a function of the form (csound: Csound) -> None,
+            func: a function of the form ``(csound: Csound) -> None``,
                 which can access the csound API
 
         .. note::
-            This method is only available if this PerformanceThread was
-            created with ``withProcessQueue=True``
+            This method is only available if the process queue was set
+            (via :py:meth:`setProcessQueue`). In csound 7 it is advisable
+            to use :py:meth:`requestCallback` instead of setting a process
+            queue.
 
         .. rubric:: Example
 
@@ -2840,7 +2827,8 @@ class PerformanceThread:
             import queue
             cs = Csound()
             cs.compileOrc(...)
-            thread = cs.performanceThread(withProcessQueue=True)
+            thread = cs.performanceThread()
+            thread.setProcessQueue()
 
             sndfile = "/path/to/sndfile.wav"
             q = queue.SimpleQueue()
@@ -2852,7 +2840,7 @@ class PerformanceThread:
                 tabpointer = csound.table(tabnum)
                 q.put((tabnum, tabpointer))
 
-            thread.queueTask(mytask)
+            thread.processQueueTask(mytask)
             tabnum, tabpointer = q.get(block=True)
 
         .. seealso:: :py:meth:`evalCode()`
@@ -2864,20 +2852,22 @@ class PerformanceThread:
         assert self._processQueue is not None
         self._processQueue.put_nowait(func)
 
-    def queueSync(self, timeout: float | None = None) -> None:
+    def flushProcessQueue(self, timeout: float | None = None) -> None:
         """
         Wait until all process queue tasks have been acted upon
 
-        This method can only be called if this PerformanceThread was
-        created with ``withProcessQueue=True``
-
         Args:
             timeout: if given, a max. amount of time to wait
+
+        .. note::
+            This method is only available if the process queue was set (see
+            :py:meth:`setProcessQueue`)
+
         """
         if self._processQueue is None or self._processQueue.qsize() == 0:
             return
         event = _threading.Event()
-        self.queueTask(lambda cs, e=event: e.set())
+        self.processQueueTask(lambda cs, e=event: e.set())
         event.wait(timeout=timeout)
 
     def csoundPtr(self) -> ct.c_void_p:
