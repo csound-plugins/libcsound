@@ -548,7 +548,14 @@ class Csound:
 
     def APIVersion(self) -> int:
         """
-        For compatibility. csound 7 does not implement an api version at the moment
+        For compatibility, csound 7 does not implement an api version at the moment
+
+        In csound 6 there was a version for csound / libcsound and a version for
+        the API, indicating that a new version of csound did not necessarily mean
+        a modification of the API itself. The API version tracked changes in the API.
+        With csound 7 this practice has been abandoned and the API version removed.
+        This method is added for compatibility, with the version reported being the
+        same as the csound version (returned by :py:meth:`version`)
         """
         return self.version()
 
@@ -1368,16 +1375,31 @@ class Csound:
         libcsound.csoundCreateMessageBuffer(self.cs, ct.c_int32(echo))
 
     def firstMessage(self) -> str:
-        """Returns the first message from the buffer."""
+        """
+        Returns the first message from the buffer.
+
+        .. seealso:: :py:meth:`readMessage` or :py:meth:`iterMessages` for a
+            more ergonomic method to access the message buffer
+        """
         s = libcsound.csoundGetFirstMessage(self.cs)
         return pstring(s)
 
     def firstMessageAttr(self) -> int:
-        """Returns the attribute parameter of the first message in the buffer."""
+        """
+        Returns the attribute parameter of the first message in the buffer.
+
+        .. seealso:: :py:meth:`readMessage` or :py:meth:`iterMessages` for a
+            more ergonomic method to access the message buffer
+        """
         return libcsound.csoundGetFirstMessageAttr(self.cs)
 
     def popFirstMessage(self) -> None:
-        """Removes the first message from the buffer."""
+        """
+        Removes the first message from the buffer.
+
+        .. seealso:: :py:meth:`readMessage` or :py:meth:`iterMessages` for a
+            more ergonomic method to access the message buffer
+        """
         libcsound.csoundPopFirstMessage(self.cs)
 
     def messageCnt(self) -> int:
@@ -1393,7 +1415,7 @@ class Csound:
         Reads a message from the message buffer and removes it from it
 
         Returns:
-            a tuple (message: str, attribute: int). If there are no more
+            a tuple ``(message: str, attribute: int)``. If there are no more
             messages, the message is an empty string and attribute is 0
         """
         cnt = self.messageCnt()
@@ -1411,7 +1433,7 @@ class Csound:
         This operation empties the message buffer
 
         Returns:
-            an iterator of tuple(message: str, attribute: int)
+            an iterator of tuples ``(message: str, attribute: int)``
         """
         for i in range(self.messageCnt()):
             msg = self.firstMessage()
@@ -1484,8 +1506,11 @@ class Csound:
             name: the name of the channel
 
         Returns:
-            a tuple (kind: str, mode: int). If the channel does not exist
-            kind will be an empty string and mode will be 0
+            a tuple ``(kind: str, mode: int)``.
+
+        If the channel does not exist kind will be an empty string and
+        mode will be 0. Kind is one of 'control', 'audio', 'string',
+        'pvs' or 'array'. Mode is 1 for input, 2 for output, 3 for input+output
         """
         ptr = ct.c_void_p()
         ret = libcsound.csoundGetChannelPtr(self.cs, ct.byref(ptr), cstring(name), 0)
@@ -1797,22 +1822,33 @@ class Csound:
         """
         libcsound.csoundSetControlChannel(self.cs, cstring(name), MYFLT(val))
 
-    def audioChannel(self, name: str, samples: np.ndarray):
+    def audioChannel(self, name: str, samples: np.ndarray | None = None) -> np.ndarray:
         """
         Copies the audio channel identified by *name* into ndarray samples.
 
         Args:
             name: the name of the channel
             samples: an array of float64 to hold the audio samples. It should
-                be a 1D array at least ``ksmps`` in size
+                be a 1D array at least ``ksmps`` in size. If not given a new
+                array is created
+
+        Returns:
+            the np.ndarray holding the samples. If an array was passed as argument
+            the same array is returned
+
+        .. seealso:: :py:meth:`setAudioChannel`
         """
-        if len(samples.shape) > 1:
-            raise ValueError(f"Only 1-dimensional arrays supported, got {samples}")
-        if len(samples) < self.ksmps():
-            raise ValueError(f"The given array is too small (ksmps: {self.ksmps()}, "
-                             f"size of the given array: {len(samples)}")
+        if samples is None:
+            samples = np.zeros((self.ksmps(),), dtype=float)
+        else:
+            if len(samples.shape) > 1:
+                raise ValueError(f"Only 1-dimensional arrays supported, got {samples}")
+            if len(samples) < self.ksmps():
+                raise ValueError(f"The given array is too small (ksmps: {self.ksmps()}, "
+                                f"size of the given array: {len(samples)}")
         ptr = samples.ctypes.data_as(ct.POINTER(MYFLT))
         libcsound.csoundGetAudioChannel(self.cs, cstring(name), ptr)
+        return samples
 
     def setAudioChannel(self, name: str, samples: np.ndarray):
         """
@@ -1823,6 +1859,7 @@ class Csound:
             samples: an array of float64 to hold the audio samples. It should
                 be a 1D array at least ``ksmps`` in size
 
+        .. seealso:: :py:meth:`audioChannel`
         """
         if len(samples.shape) > 1:
             raise ValueError(f"Only 1-dimensional arrays supported, got {samples}")
@@ -2019,7 +2056,7 @@ class Csound:
                 performed asynchronously
 
         .. note:: this method does not exist in csound 6. For backwards compatibility
-            use :meth:`Csound.scoreEvent` or :meth:`Csound.scoreEventAsync`
+            use :py:meth:`scoreEvent` or :py:meth:`scoreEventAsync`
         """
         # TODO: is time absolute or relative here???
         eventtype = _scoreEventToTypenum.get(kind)
@@ -2040,15 +2077,18 @@ class Csound:
         Args:
             kind: the kind of event, one of 'i', 'f', 'e'
             pfields: pfields of the event, starting with p1
+
+        Returns:
+            CSOUND_SUCCESS (0) if ok, an error otherwise
         """
         self.event(kind=kind, pfields=pfields, block=True)
         return CSOUND_SUCCESS
 
-    def scoreEventAsync(self, kind: str, pfields: _t.Sequence[float] | np.ndarray):
+    def scoreEventAsync(self, kind: str, pfields: _t.Sequence[float] | np.ndarray) -> None:
         """
         Send a new event, async
 
-        This is an alias to event(..., block=True), here for compatibility
+        This is an alias to ``csound.event(..., block=True)``, here for compatibility
         with csound 6
 
         Args:
@@ -2059,7 +2099,7 @@ class Csound:
 
     def setEndMarker(self, time: float) -> None:
         """
-        Add an end event to the score
+        Add an end event ('e') to the score
 
         This stops the performance at the given time
 
@@ -2072,14 +2112,29 @@ class Csound:
         """
         Send a new event as a string, blocking
 
-        Similar to eventString, here for compatibility with csound6
+        The syntax is the same as a score line.
+
+        Similar to :py:meth:`eventString`, here for compatibility with csound6
 
         Args:
             s: a score line to send
+
+        .. seealso:: :py:meth:`inputMessageAsync`
         """
         return self.eventString(message, block=True)
 
     def inputMessageAsync(self, message: str) -> None:
+        """
+        Send a new event as a string, async
+
+        Similar to :py:meth:`eventString` called with ``block=False``,
+        here for compatibility with csound6
+
+        Args:
+            s: a score line to send
+
+        .. seealso:: :py:meth:`inputMessage`
+        """
         return self.eventString(message, block=False)
 
     def eventString(self, message: str, block=True):
@@ -2089,6 +2144,12 @@ class Csound:
             message: the message to send. Multiple events separated by newlines
                 are possible. Score preprocessing (carry, etc.) is applied
             block: if true, the operation is run blocking
+
+        .. note::
+
+            This method is new in csound 7, fusing :py:meth:`inputMessage`
+            and :py:meth:`inputMessageAsync` into one method. It has been
+            ported to csound 6 for forward compatibility.
 
         """
         libcsound.csoundEventString(self.cs, cstring(message),
@@ -2338,12 +2399,27 @@ class Csound:
     def appendOpcode(self, opname: str, dsblksiz: int, flags: int,
                      outypes: str, intypes: str, initfunc: _t.Callable,
                      perffunc: _t.Callable, deinitfunc: _t.Callable = None):
-        """Appends an opcode implemented by external software.
+        """
+        Appends an opcode implemented by external software.
 
         This opcode is added to Csound's internal opcode list.
+
         The opcode list is extended by one slot, and the parameters are copied
         into the new slot.
-        Returns zero on success.
+
+        Args:
+            opname: opcode name
+            dsblksiz: ``sizeof`` the structure used for the opcode.
+            flags: flags passed, normally 0
+            outtypes: a string defining the output types of the opcode
+            intypes: string defining input types
+            initfunc: func called at init, with the form (CSOUND *, void *),
+                where the second pointer is a pointer to a struct used for the opcode
+            perffunc: func called at perf time, with the same form as the initfunc
+            deinitfunc: func called at deinit, same form as initfunc
+
+        Returns:
+            zero on success
         """
         deinit = deinitfunc if deinitfunc else OPCODEFUNC()
         return libcsound.csoundAppendOpcode(self.cs, cstring(opname), dsblksiz,

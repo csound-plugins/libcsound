@@ -1932,7 +1932,7 @@ class Csound:
         Reads a message from the message buffer and removes it from it
 
         Returns:
-            a tuple (message: str, attribute: int). If there are no more
+            a tuple ``(message: str, attribute: int)``. If there are no more
             messages, the message is an empty string and attribute is 0
         """
         cnt = self.messageCnt()
@@ -1950,7 +1950,7 @@ class Csound:
         This operation empties the message buffer
 
         Returns:
-            an iterator of tuple(message: str, attribute: int)
+            an iterator of tuples ``(message: str, attribute: int)``
         """
         for i in range(self.messageCnt()):
             msg = self.firstMessage()
@@ -1979,8 +1979,11 @@ class Csound:
             name: the name of the channel
 
         Returns:
-            a tuple (kind: str, mode: int). If the channel does not exist
-            kind will be an empty string and mode will be 0
+            a tuple ``(kind: str, mode: int)``.
+
+        If the channel does not exist kind will be an empty string and
+        mode will be 0. Kind is one of 'control', 'audio', 'string',
+        'pvs' or 'array'. Mode is 1 for input, 2 for output, 3 for input+output
         """
         ptr = ct.c_void_p()
         ret = libcsound.csoundGetChannelPtr(self.cs, ct.byref(ptr), cstring(name), 0)
@@ -2012,17 +2015,27 @@ class Csound:
                 channel declared as input ('r') will read information from the host,
                 a channel declared as output ('w') will write information to the host.
 
-        If the channel is a control or an audio channel, the pointer is
-        translated to an ``ndarray`` of MYFLT (float64 in all major desktop platforms).
-        If the channel is a string channel, the pointer is casted to :code:`ct.c_char_p`.
+        Returns:
+            a tuple (pointer, errormsg)
+
+        ==============  ====================
+        Channel Kind    Returned Pointer
+        ==============  ====================
+        control         numpy array, float64, size 1
+        audio           numpy array, float64, size ``ksmps``
+        string          ctypes.c_char_p
+        pvs             ctypes.c_void_p
+        array           numpy array, float64 (arbitrary shape)
+        ==============  ====================
+
         The error message is either an empty string or a string describing the error.
 
         The channel is created first if it does not exist yet.
 
         If the channel already exists, it must match the data type
-        (control, audio, or string), however, the mode bits are
-        OR'd with the new value, meaning that a channel declared in csound
-        as input can be made to be input+output if called with 'rw' as mode.
+        (control, audio, or string). The mode bits are
+        OR'd with the new value, meaning that **a channel declared in csound
+        as input can be made to be input+output if called with 'rw' as mode**.
 
         .. note::
 
@@ -2276,14 +2289,23 @@ class Csound:
         Args:
             name: the name of the channel
             samples: an array of float64 to hold the audio samples. It should
-                be a 1D array at least ``ksmps`` in size
+                be a 1D array at least ``ksmps`` in size. If not given a new
+                array is created
 
+        Returns:
+            the np.ndarray holding the samples. If an array was passed as argument
+            the same array is returned
+
+        .. seealso:: :py:meth:`setAudioChannel`
         """
-        if len(samples.shape) > 1:
-            raise ValueError(f"Only 1-dimensional arrays supported, got {samples}")
-        if len(samples) < self.ksmps():
-            raise ValueError(f"The given array is too small (ksmps: {self.ksmps()}, "
-                             f"size of the given array: {len(samples)}")
+        if samples is None:
+            samples = np.zeros((self.ksmps(),), dtype=float)
+        else:
+            if len(samples.shape) > 1:
+                raise ValueError(f"Only 1-dimensional arrays supported, got {samples}")
+            if len(samples) < self.ksmps():
+                raise ValueError(f"The given array is too small (ksmps: {self.ksmps()}, "
+                                f"size of the given array: {len(samples)}")
         ptr = samples.ctypes.data_as(ct.POINTER(MYFLT))
         libcsound.csoundGetAudioChannel(self.cs, cstring(name), ptr)
 
@@ -2295,6 +2317,7 @@ class Csound:
             samples: an array of float64 to hold the audio samples. It should
                 be a 1D array at least ``ksmps`` in size
 
+        .. seealso:: :py:meth:`audioChannel`
         """
         if len(samples.shape) > 1:
             raise ValueError(f"Only 1-dimensional arrays supported, got {samples}")
@@ -2501,6 +2524,14 @@ class Csound:
                 are possible. Score preprocessing (carry, etc.) is applied
             block: if true, the operation is run blocking
 
+        .. note::
+
+            This method does not exist natively in csound 6, it just calls
+            either :py:meth:`inputMessage` or :py:meth:`inputMessageAsync`
+            respectively, depending on the value of the `block` param. It
+            exists natively in csound 7 and was backported to csound 6 for
+            forward compatibility
+
         """
         if block:
             self.inputMessage(message)
@@ -2508,17 +2539,23 @@ class Csound:
             self.inputMessageAsync(message)
 
     def inputMessage(self, message: str) -> None:
-        """Inputs a NULL-terminated string (as if from a console).
+        """
+        Send a new event as a string, blocking
 
-        Used for line events.
+        The syntax is the same as a score line
 
         .. note:: use :py:meth:`eventString()` for compatibility with csound 7
 
+        .. seealso:: :py:meth:`inputMessageAsync`
         """
         libcsound.csoundInputMessage(self.cs, cstring(message))
 
     def inputMessageAsync(self, message: str) -> None:
-        """Asynchronous version of :py:meth:`inputMessage()`."""
+        """
+        Asynchronous version of :py:meth:`inputMessage()`
+
+        .. seealso:: :py:meth:`inputMessage`
+        """
         libcsound.csoundInputMessageAsync(self.cs, cstring(message))
 
     def killInstance(self, instr: float | int | str, mode: int, allowRelease=True):
@@ -2891,13 +2928,27 @@ class Csound:
         libcsound.csoundDisposeOpcodeList(self.cs, ptr)
 
     def appendOpcode(self, opname, dsblksiz, flags, thread, outypes, intypes, iopfunc, kopfunc, aopfunc):
-        """Appends an opcode implemented by external software.
+        """
+        Appends an opcode implemented by external software.
 
         This opcode is added to Csound's internal opcode list.
+
         The opcode list is extended by one slot, and the parameters are copied
         into the new slot.
 
-        Returns zero on success.
+        Args:
+            opname: opcode name
+            dsblksiz: ``sizeof`` the structure used for the opcode.
+            flags: flags passed, normally 0
+            outtypes: a string defining the output types of the opcode
+            intypes: string defining input types
+            initfunc: func called at init, with the form (CSOUND *, void *),
+                where the second pointer is a pointer to a struct used for the opcode
+            perffunc: func called at perf time, with the same form as the initfunc
+            deinitfunc: func called at deinit, same form as initfunc
+
+        Returns:
+            zero on success
         """
         return libcsound.csoundAppendOpcode(self.cs, cstring(opname), dsblksiz, flags, thread,
                                             cstring(outypes), cstring(intypes),
