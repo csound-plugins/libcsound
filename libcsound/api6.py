@@ -1110,6 +1110,55 @@ class Csound:
         Multiple options are allowed in one string.
         Returns zero on success.
 
+        .. rubric:: Options
+
+        ``--output= (-o)``
+            Output device or filename. ``-odac`` for realtime
+            audio using the default device. When using jack,
+            ``-odac:<portpattern>``, for example
+            ``-odac:"Built-in Audio Analog Stereo"`` will connect
+            to all ports matching the given pattern
+
+        ``--input= (-i)``
+            Input device or filename. Similar to ``-o``
+        ``-+rtaudio=<module>``
+            Real-time audio module, used with ``-odac...``, possible
+            values are ``portaudio``, ``auhal`` (coreaudio, only in macos),
+            ``alsa`` (linux only), ``jack``, ``pulse`` (pulseaudio, linux)
+        ``-+rtmidi=``
+            Real time MIDI module
+        ``--nodisplays (-d)``
+            Supress all displays
+        ``--format=<fmt>``
+            Soundfile format, one of ``wav, aiff, w64, flac, caf, ogg, mpeg``
+        ``--format=<fmt>``
+            Sample format, one of ``alaw, ulaw, float, double, short, long, 24bit, vorbis``
+        ``--midi-device=<dev>``
+            Read MIDI from the given device
+        ``--realtime``
+            Realtime priority mode
+        ``--sample-accurate``
+            Use sample-accurate timing of score events
+        ``--nosound``
+            No sound onto disk or device
+        ``--messagelevel=N (-m)``
+            Console message level, sum of: 1=note amps, 2=out-of-range msg,
+            4=warnings, 0/32/64/96=note amp format (raw,dB,colors),
+            128=print benchmark information. Use ``-m0`` to disable note messages
+        ``--use-system-sr``
+            Use the system samplerate for realtime audio. Not all audio backends
+            define a system sr. Backends which do define system sr: ``jack``,
+            ``auhal``, ``pulse``
+        ``--get-system-sr``
+            Print system sr and exit, requires realtime audio output
+            (e.g. -odac) to be defined first)
+        ``--port=N``
+            Listen to UDP port N for orchestra code (implies ``--daemon``)
+        ``--limiter[=num]``
+            Include clipping in audio output
+
+        See ``csound --help`` for a complete list of options
+
         """
         parts = _util.splitCommandLine(option)
         out = 0

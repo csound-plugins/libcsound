@@ -44,9 +44,10 @@ html_static_path = ['_static']
 html_theme_options = {
     "show_navbar_depth": 3,
     "max_navbar_depth": 5,
-    "show_toc_level": 2
+    "show_toc_level": 2,
+    "use_fullscreen_button": False,
+    
 }
-
 
 # Disable having a separate return type row
 napoleon_use_rtype = False

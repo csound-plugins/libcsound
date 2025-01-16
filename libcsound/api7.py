@@ -656,6 +656,55 @@ class Csound:
 
         **Options can only be set before the csound process is started**. Multiple
         options are allowed in one string.
+
+        .. rubric:: Options
+
+        ``--output= (-o)``
+            Output device or filename. ``-odac`` for realtime
+            audio using the default device. When using jack,
+            ``-odac:<portpattern>``, for example
+            ``-odac:"Built-in Audio Analog Stereo"`` will connect
+            to all ports matching the given pattern
+
+        ``--input= (-i)``
+            Input device or filename. Similar to ``-o``
+        ``-+rtaudio=<module>``
+            Real-time audio module, used with ``-odac...``, possible
+            values are ``portaudio``, ``auhal`` (coreaudio, only in macos),
+            ``alsa`` (linux only), ``jack``, ``pulse`` (pulseaudio, linux)
+        ``-+rtmidi=``
+            Real time MIDI module
+        ``--nodisplays (-d)``
+            Supress all displays
+        ``--format=<fmt>``
+            Soundfile format, one of ``wav, aiff, w64, flac, caf, ogg, mpeg``
+        ``--format=<fmt>``
+            Sample format, one of ``alaw, ulaw, float, double, short, long, 24bit, vorbis``
+        ``--midi-device=<dev>``
+            Read MIDI from the given device
+        ``--realtime``
+            Realtime priority mode
+        ``--sample-accurate``
+            Use sample-accurate timing of score events
+        ``--nosound``
+            No sound onto disk or device
+        ``--messagelevel=N (-m)``
+            Console message level, sum of: 1=note amps, 2=out-of-range msg,
+            4=warnings, 0/32/64/96=note amp format (raw,dB,colors),
+            128=print benchmark information. Use ``-m0`` to disable note messages
+        ``--use-system-sr``
+            Use the system samplerate for realtime audio. Not all audio backends
+            define a system sr. Backends which do define system sr: ``jack``,
+            ``auhal``, ``pulse``
+        ``--get-system-sr``
+            Print system sr and exit, requires realtime audio output
+            (e.g. -odac) to be defined first)
+        ``--port=N``
+            Listen to UDP port N for orchestra code (implies ``--daemon``)
+        ``--limiter[=num]``
+            Include clipping in audio output
+
+        See ``csound --help`` for a complete list of options
         """
         if self._compilationStarted:
             raise RuntimeError(f"Cannot set options once code has already been compiled")
@@ -756,11 +805,11 @@ class Csound:
         Returns a list of modules
 
         Returns:
-            a list of tuples of the form (name: str, type: str),
+            a list of tuples of the form ``(name: str, type: str)``,
             where name is the name of the module and type is one of
             "audio" or "midi"
 
-        .. seealso:: :meth:`Csound.module`
+        .. seealso:: :py:meth:`module`
         """
         n = 0
         out = []
@@ -897,6 +946,7 @@ class Csound:
             cs.scoreEvent(...)
             cs.perform()
 
+        .. seealso:: :meth:`PerformanceThread.compileOrc`
         """
         return libcsound.csoundCompileOrc(self.cs, cstring(orc), ct.c_int32(not block))
 
@@ -917,6 +967,9 @@ class Csound:
         The code is parsed and compiled, then placed on a queue for
         asynchronous merge into the running engine, and evaluation.
         The function returns following parsing and compilation.
+
+        .. seealso:: :meth:`PerformanceThread.compileOrc`
+
         """
         return self.compileOrc(orc, block=False)
 
@@ -2657,9 +2710,14 @@ class Csound:
 
         .. note::
             Not present in csound 7. This is placed here for compatibility
-            with csound 6. In csound 7 this functionality is not exposed through
-            the API and must be set via command-line options (``--port=...``),
-            see :meth:`~Csound.setOption`
+            with csound 6.
+
+        In csound 7 this functionality is not exposed through the API and must
+        be set via command-line options (``--port=...``). This means that the
+        UDP server can only be started before any compilation has taken place,
+        since options can not be set after the csound process has been started
+
+        .. seealso:: :py:meth:`setOption`
         """
         self.setOption(f'--port={port}')
         return CSOUND_SUCCESS
