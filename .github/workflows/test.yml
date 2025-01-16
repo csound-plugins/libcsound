@@ -31,7 +31,7 @@ jobs:
           cd csound
           sudo apt-get update && sudo apt-get install cmake libsndfile1-dev libasound2-dev libjack-dev portaudio19-dev libportmidi-dev libpulse-dev default-jdk liblo-dev libpng-dev libgmm++-dev bison flex libportsmf-dev libeigen3-dev libcunit1-dev
           mkdir build && cd build
-          cmake .. -DUSE_MP3=0 -D
+          cmake .. -DUSE_MP3=OFF -DBUILD_OSC_OPCODES=OFF -DBUILD_TESTS=OFF -DBUILD_JAVA_INTERFACE=OFF
           cmake --build . --parallel
           sudo make install
           # sudo cmake --install .
