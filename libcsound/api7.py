@@ -487,13 +487,21 @@ class Csound:
 
         self._started = False
 
+    def destroy(self):
+        if self._perfthread:
+            self._perfthread = None  # This should destroy the performance thread
+        if self.cs is not None:
+            libcsound.csoundDestroy(self.cs)
+            self.cs = None
+
     def __del__(self):
         """Destroys an instance of Csound."""
         if self._perfthread:
             self._perfthread = None  # This should destroy the performance thread
 
-        if not self._fromPointer and libcsound:
+        if not self._fromPointer and self.cs is not None:
             libcsound.csoundDestroy(self.cs)
+            self.cs = None
 
     def csound(self) -> CSOUND_p:
         """
@@ -2831,7 +2839,7 @@ class PerformanceThread:
                 job = self._processQueue.get_nowait()
                 job(self.csound)
 
-    def requestCallback(self, callback: _t.Callable[[PerformanceThread], None]) -> None:
+    def requestCallback(self, callback: _t.Callable[[Csound], None]) -> None:
         """
         Calls the given callback within the performance loop
 

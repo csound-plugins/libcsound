@@ -548,6 +548,13 @@ class Csound:
         if not self._fromPointer and libcsound:
             libcsound.csoundDestroy(self.cs)
 
+    def destroy(self):
+        if self._perfthread:
+            self._perfthread = None  # This should destroy the performance thread
+        if self.cs is not None:
+            libcsound.csoundDestroy(self.cs)
+            self.cs = None
+
     def csound(self) -> ct.c_void_p:
         """Returns the opaque pointer to the running Csound instance."""
         return self.cs

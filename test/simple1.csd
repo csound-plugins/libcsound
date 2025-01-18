@@ -3,6 +3,7 @@
 <CsOptions>
 -d 
 -o dac 
+-i adc
 -m0
 --use-system-sr
 
@@ -10,9 +11,10 @@
 
 <CsInstruments>
 ; sr     = 48000
-ksmps  = 100
+ksmps  = 64
 nchnls = 2
 0dbfs  = 1
+nchnls_i = 2
 
 instr 1
   pset 0, 0, 0, 0.1, 1000, 0.1, 0.2, 0.5
