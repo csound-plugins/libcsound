@@ -2170,7 +2170,8 @@ class Csound:
         examples. Optionally, use the channel get/set functions
         provided below, which are threadsafe by default.
         """
-        ptr = ct.c_void_p()
+        # ptr = ct.c_void_p()
+        ptr = ct.POINTER(MYFLT)()
         chantype = type_ & CSOUND_CHANNEL_TYPE_MASK
         if chantype not in (CSOUND_STRING_CHANNEL, CSOUND_AUDIO_CHANNEL, CSOUND_CONTROL_CHANNEL):
             raise ValueError(f"Invalid channel type: {type_}")
