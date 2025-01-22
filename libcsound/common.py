@@ -2,7 +2,11 @@ from __future__ import annotations
 import ctypes as ct
 import sys
 from dataclasses import dataclass
+import logging
 from typing import Sequence
+
+
+logger = logging.getLogger("libcsound")
 
 
 BUILDING_DOCS = 'sphinx' in sys.modules

@@ -1170,6 +1170,8 @@ class Csound:
         parts = _util.splitCommandLine(option)
         out = 0
         for part in parts:
+            if '"' in part:
+                part = part.replace('"', '')
             out |= libcsound.csoundSetOption(self.cs, cstring(part))
         return out
 
@@ -3865,7 +3867,7 @@ class PerformanceThread:
         if N > 0:
             for _ in range(min(10, N)):
                 job = self._processQueue.get_nowait()
-                job(self.csound, self)
+                job(self.csound)
 
     def processQueueTask(self, func: _t.Callable[[Csound], None]) -> None:
         """
