@@ -642,6 +642,21 @@ class Csound:
         _notPresentInCsound7()
         libcsound.csoundDeleteTree(self.cs, tree)
 
+    def compileOrcHeader(self,
+                         sr: int | None,
+                         nchnls=2,
+                         nchnls_i: int | None = None,
+                         zerodbfs=1.,
+                         ksmps=64,
+                         a4=440):
+        lines = [f'ksmps = {ksmps}\nchnls = {nchnls}\n0dbfs = {zerodbfs}\nA4 = {a4}']
+        if sr is not None:
+            lines.append(f'sr = {sr}')
+        if nchnls_i is not None:
+            lines.append(f'nchnls_i = {nchnls_i}')
+        code = '\n'.join(lines)
+        self.compileOrc(code)
+
     def compileOrc(self, orc: str, block=True) -> int:
         """
         Compiles the given orchestra code
