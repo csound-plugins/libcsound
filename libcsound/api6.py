@@ -649,6 +649,18 @@ class Csound:
                          zerodbfs=1.,
                          ksmps=64,
                          a4=440):
+        """
+        Compile the orchestra header (sr, ksmps, nchnls, ...)
+
+        Args:
+            sr: the sample rate. Only included if given
+            ksmps: samples per cycle
+            nchnls: number of output channels
+            nchnls_i: number of input channels
+            zerodbfs: the value of 0dbfs, should be 1. for any mordern orchestra
+            a4: reference frequency
+
+        """
         lines = [f'ksmps = {ksmps}\nchnls = {nchnls}\n0dbfs = {zerodbfs}\nA4 = {a4}']
         if sr is not None:
             lines.append(f'sr = {sr}')
