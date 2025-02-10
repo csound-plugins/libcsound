@@ -129,6 +129,7 @@ jobs:
           cd test
           python actions-test1.py -o actions-test1-${{ runner.os }}-${{ matrix.install-method }}-py${{ matrix.python-version }}-${{ matrix.csound-branch }}.flac
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: artifact-${{matrix.csound-branch }}-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index}}
           path: test/*.flac
