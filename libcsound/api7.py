@@ -469,12 +469,12 @@ class Csound:
         If not None the opcodeDir parameter sets an override for the plugin module/opcode
         directory search.
         """
-        if pointer:
-            self.cs = pointer
+        if pointer is not None:
+            self.cs: CSOUND_p = pointer
             self._fromPointer = True
         else:
             opcdir = cstring(opcodeDir) if opcodeDir else ct.c_char_p()
-            self.cs = libcsound.csoundCreate(ct.py_object(hostData), opcdir)
+            self.cs: CSOUND_p = libcsound.csoundCreate(ct.py_object(hostData), opcdir)
             self._fromPointer = False
 
         self._callbacks: dict[str, ct._FuncPointer] = {}
@@ -3170,7 +3170,7 @@ class PerformanceThread:
             time: time to add the end event
             absolute: if True, use absolute time
         """
-        self.scoreEvent(int(absolute), "e", [0, time])
+        self.scoreEvent(absolute, "e", [0, time])
 
 
 def getSystemSr(module: str = '') -> tuple[float, str]:

@@ -115,12 +115,11 @@ class ChannelInfo:
     mode: int
     hints: dict | None
 
-def isoutput(self) -> bool:
-    return self.mode & CSOUND_OUTPUT_CHANNEL
+    def isoutput(self) -> bool:
+        return bool(self.mode & CSOUND_OUTPUT_CHANNEL)
 
-def isinput(self) -> bool:
-    return self.mode & CSOUND_INPUT_CHANNEL
-
+    def isinput(self) -> bool:
+        return bool(self.mode & CSOUND_INPUT_CHANNEL)
 
 
 class CsoundRandMTState(ct.Structure):
