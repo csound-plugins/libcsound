@@ -14,3 +14,4 @@ uv.lock
 pyrightconfig.json
 docs/notebooks/Untitled*.ipynb
 .zed
+.ruff*
