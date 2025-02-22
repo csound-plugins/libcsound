@@ -113,7 +113,7 @@ def realtimeModulesForPlatform(platform='') -> set[str]:
     elif platform == 'windows':
         return {'portaudio', 'winmme'}
     else:
-        return {}
+        return set()
 
 
 def testCsound(module: str = '',
@@ -169,7 +169,7 @@ def testCsound(module: str = '',
     csound.start()
     pt = csound.performanceThread()
     pt.play()
-    pt.scoreEvent(0, "i", [1, 0, dur])
+    pt.scoreEvent(False, "i", [1, 0, dur])
     setupSigint(lambda: (pt.stop()))
     input(">>> Press any key to stop <<< \n")
     restoreSigint()
