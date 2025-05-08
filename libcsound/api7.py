@@ -238,7 +238,7 @@ def _declareAPI(libcsound, libcspt):
     libcsound.csoundEvalCode.restype = MYFLT
     libcsound.csoundEvalCode.argtypes = [CSOUND_p, ct.c_char_p]
     libcsound.csoundCompileCSD.restype = ct.c_int32
-    libcsound.csoundCompileCSD.argtypes = [CSOUND_p, ct.c_char_p, ct.c_int32]
+    libcsound.csoundCompileCSD.argtypes = [CSOUND_p, ct.c_char_p, ct.c_int32, ct.c_int32]
     libcsound.csoundStart.restype = ct.c_int32
     libcsound.csoundStart.argtypes = [CSOUND_p]
     libcsound.csoundPerformKsmps.restype = ct.c_int32
@@ -1038,11 +1038,17 @@ class Csound:
         """
         return libcsound.csoundEvalCode(self.cs, cstring(code))
 
-    def compileCsd(self, path: str) -> int:
+    def compileCsd(self, path: str, block=True) -> int:
         """
         Compiles a Csound input file (.csd file)
 
         Returns a non-zero error code on failure.
+
+        Args:
+            path: the path to the .csd file
+            block: if True, block until finished. Otherwise compilation
+                is done asynchronously. In this case the returned value
+                is meaningless
 
         If :py:meth:`start()` is called before this method, the ``<CsOptions>``
         element is ignored (but :py:meth:`setOption()` can be called any number of
@@ -1083,14 +1089,17 @@ class Csound:
             cs.reset()
 
         """
-        return libcsound.csoundCompileCSD(self.cs, cstring(path), ct.c_int32(0))
+        return libcsound.csoundCompileCSD(self.cs, cstring(path), ct.c_int32(0), ct.c_int32(1-int(block)))
 
-    def compileCsdText(self, code: str) -> int:
+    def compileCsdText(self, code: str, block=True) -> int:
         """
         Compiles a Csound input file (.csd file) or a text string.
 
         Args:
             code: the code to compile
+            block: if True, block until finished. Otherwise compilation
+                is done asynchronously. In this case the returned value
+                is meaningless
 
         Returns:
             non-zero error code on failure.
@@ -1133,7 +1142,7 @@ class Csound:
                 pass
             cs.reset()
         """
-        return libcsound.csoundCompileCSD(self.cs, cstring(code), ct.c_int32(1))
+        return libcsound.csoundCompileCSD(self.cs, cstring(code), ct.c_int32(1), ct.c_int32(1-int(block)))
 
     def start(self):
         """
