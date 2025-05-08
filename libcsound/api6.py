@@ -556,7 +556,15 @@ class Csound:
             self.cs = None
 
     def csound(self) -> ct.c_void_p:
-        """Returns the opaque pointer to the running Csound instance."""
+        """
+        Returns the opaque pointer to the running Csound instance.
+
+        Raises RuntimeError if the internal pointer is None. This might
+        happen if this method is being called after the csound instance
+        has been deleted
+        """
+        if self.cs is None:
+            raise RuntimeError("The internal pointer is None")
         return self.cs
 
     def version(self) -> int:
@@ -831,11 +839,13 @@ class Csound:
         argc, argv = csoundArgList(args)
         return libcsound.csoundCompile(self.cs, argc, argv)
 
-    def compileCsd(self, path: str) -> int:
+    def compileCsd(self, path: str, block=True) -> int:
         """Compiles a Csound input file (.csd file).
 
         Args:
             path: the path to the csd file
+            block: dummy argument, this functions is always blocking in
+                csound6
 
         Returns:
             CSOUND_SUCCESS (0) if ok, an error code otherwise
@@ -863,11 +873,13 @@ class Csound:
         """
         return libcsound.csoundCompileCsd(self.cs, cstring(path))
 
-    def compileCsdText(self, code: str) -> int:
+    def compileCsdText(self, code: str, block=True) -> int:
         """Compiles a Csound input file contained in a string of text.
 
         Args:
             code: the code to compile
+            block: dummy argument, this functions is always blocking in
+                csound6
 
         Returns:
             0 if ok, a non-zero code on failure

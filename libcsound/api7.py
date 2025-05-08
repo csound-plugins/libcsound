@@ -492,7 +492,7 @@ class Csound:
             self._perfthread = None  # This should destroy the performance thread
         if self.cs is not None:
             libcsound.csoundDestroy(self.cs)
-            self.cs = None
+            self.cs = None  # type: ignore
 
     def __del__(self):
         """Destroys an instance of Csound."""
@@ -501,7 +501,7 @@ class Csound:
 
         if not self._fromPointer and self.cs is not None:
             libcsound.csoundDestroy(self.cs)
-            self.cs = None
+            self.cs = None  # type: ignore
 
     def csound(self) -> CSOUND_p:
         """
@@ -982,15 +982,18 @@ class Csound:
         return self.compileOrc(orc, block=False)
 
     def compileOrcHeader(self,
-                         sr: int | None,
+                         sr: int | None = None,
                          nchnls=2,
                          nchnls_i: int | None = None,
                          zerodbfs=1.,
                          ksmps=64,
-                         a4=440) -> None:
+                         a4: int | None = None) -> None:
         """
         Compile the orchestra header (sr, ksmps, nchnls, ...)
 
+        Only those values which are explicitly given (not None) are included
+
+        .. note:: Values set via options are prioritized over values set in the orchestra
 
         Args:
             sr: the sample rate
@@ -1000,11 +1003,14 @@ class Csound:
             zerodbfs: the value of 0dbfs, should be 1. for any mordern orchestra
             a4: reference frequency
         """
-        lines = [f'ksmps = {ksmps}\nchnls = {nchnls}\n0dbfs = {zerodbfs}\nA4 = {a4}']
+        lines = []
         if sr is not None:
             lines.append(f'sr = {sr}')
+        lines.append(f'ksmps = {ksmps}\nchnls = {nchnls}\n0dbfs = {zerodbfs}')
         if nchnls_i is not None:
             lines.append(f'nchnls_i = {nchnls_i}')
+        if a4 is not None:
+            lines.append(f'A4 = {a4}')
         code = '\n'.join(lines)
         self.compileOrc(code)
 
