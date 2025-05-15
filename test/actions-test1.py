@@ -47,10 +47,7 @@ endin
 
 print("Duration: ", args.dur)
 
-cs.scoreEvent('i', [1, 0, args.dur])
-
 cs.start()
-
 cs.scoreEvent('i', [1, 0, args.dur])
 cs.scoreEvent('e', [0, args.dur+0.01])
 
