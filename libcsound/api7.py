@@ -1004,9 +1004,9 @@ class Csound:
             a4: reference frequency
         """
         lines = []
-        if sr is not None:
+        if sr:
             lines.append(f'sr = {sr}')
-        lines.append(f'ksmps = {ksmps}\nchnls = {nchnls}\n0dbfs = {zerodbfs}')
+        lines.append(f'ksmps = {ksmps}\nnchnls = {nchnls}\n0dbfs = {zerodbfs}')
         if nchnls_i is not None:
             lines.append(f'nchnls_i = {nchnls_i}')
         if a4 is not None:
@@ -2162,6 +2162,9 @@ class Csound:
             use :py:meth:`scoreEvent` or :py:meth:`scoreEventAsync`
         """
         # TODO: is time absolute or relative here???
+        if not self._started:
+            raise RuntimeError("Csound was not started yet, cannot schedule any events")
+
         eventtype = _scoreEventToTypenum.get(kind)
         if eventtype is None:
             raise ValueError(f"Invalid event kind, get {kind}, expected one of {_scoreEventToTypenum.keys()}")

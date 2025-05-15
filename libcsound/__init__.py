@@ -32,6 +32,11 @@
 from . import common
 
 if not common.BUILDING_DOCS:
+    # this disables warnings about denormals
+    import numpy as np
+    np.finfo(np.dtype("float32"))
+    np.finfo(np.dtype("float64"))
+
     from . import _dll
     libcsound, libcsoundPath = _dll.csoundDLL()
     VERSION = libcsound.csoundGetVersion()

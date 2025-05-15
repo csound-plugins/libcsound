@@ -10,8 +10,8 @@ import libcsound
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-o', '--outfile', default='test.wav')
-parser.add_argument('-d', '--dur', default=10, type=int)
+parser.add_argument('-o', '--outfile', default='actionstest.wav')
+parser.add_argument('-d', '--dur', default=6, type=int)
 args = parser.parse_args()
 
 cs = libcsound.Csound()
@@ -36,7 +36,7 @@ nchnls = 2
 
 instr 1
   kchan init -1
-  kchan = (kchan + metro:k(1)) % nchnls
+  kchan = (kchan + metro:k(2)) % nchnls
   if changed:k(kchan) == 1 then
     println "Channel: %d", kchan + 1
   endif
@@ -45,11 +45,16 @@ instr 1
 endin
 ''')
 
+print("Duration: ", args.dur)
+
 cs.scoreEvent('i', [1, 0, args.dur])
-cs.scoreEvent('e', [0, args.dur])
+
 cs.start()
 
-while not cs.performKsmps():
+cs.scoreEvent('i', [1, 0, args.dur])
+cs.scoreEvent('e', [0, args.dur+0.01])
+
+while cs.performKsmps() == libcsound.CSOUND_SUCCESS:
     print(".", end='')
     pass
 print("\nFinished...")
