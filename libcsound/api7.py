@@ -2990,13 +2990,14 @@ class PerformanceThread:
             libcspt.csoundPerformanceThreadEvalCode(self.cpt, cstring(code), callback)
             return q.get(timeout=timeout)
 
-    def processQueueTask(self, func: _t.Callable[[Csound], None]) -> None:
+    def processQueueTask(self, func: _t.Callable[[Csound], _t.Any]) -> None:
         """
         Add a task to the process queue, to be picked up by the process callback
 
         Args:
             func: a function of the form ``(csound: Csound) -> None``,
-                which can access the csound API
+                which can access the csound API. Any returned value from
+                the callback is ignored
 
         .. note::
             This method is only available if the process queue was set
