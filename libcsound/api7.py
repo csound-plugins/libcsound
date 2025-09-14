@@ -711,6 +711,8 @@ class Csound:
             Listen to UDP port N for orchestra code (implies ``--daemon``)
         ``--limiter[=num]``
             Include clipping in audio output
+        ``--suppress-version``
+            Do not print version info
 
         See ``csound --help`` for a complete list of options
         """
