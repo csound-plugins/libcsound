@@ -21,7 +21,7 @@ jobs:
       - name: linux setup csound6
         if: runner.os == 'linux' && matrix.csound-branch == 'csound6'
         run: |
-          sudo apt install csound libcsnd-dev
+          sudo apt-get update && sudo apt-get install csound libcsnd-dev
           csound --version
 
       - name: linux setup csound 7
