@@ -8,7 +8,7 @@ jobs:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         python-version: ["3.10", "3.13"]
         install-method: ["git"]
-        csound-branch: ["csound6", "develop", "develop-release"]
+        csound-branch: ["csound6", "develop"]
       fail-fast: false
 
     steps:
@@ -59,7 +59,7 @@ jobs:
           cd csound
           brew install bison flex libmicrohttpd libogg flac lame libvorbis mpg123 opus libsndfile portaudio fluid-synth libaec libsamplerate aften liblo openblas portmidi
           cmake -B build -DBUILD_TESTS=0 -DCUSTOM_CMAKE="../cmake/csound-custom-macos.cmake"
-          
+
           cmake --build build --config Release
           sudo cmake --install build
           csound --version
@@ -88,17 +88,17 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: windows setup csound 7 from package
-        if: runner.os == 'windows' && matrix.csound-brach == 'develop-release'
+        if: runner.os == 'windows' && matrix.csound-brach == 'develop'
         run: |
           $winpkg = "csound-windows-x86-7.0.0-beta.10"
           curl -L -o csound-binaries.zip https://github.com/csound/csound/releases/download/7.0.0-beta.10/$winpkg.zip
           Expand-Archive csound-binaries.zip
           ls -r
           New-Item -ItemType Directory -Force -Path "C:\Program Files\csound"
-  
+
           Move-Item -Path csound-binaries\$winpkg\build\* -Destination "C:/Program Files/csound"
           ls -r "C:/Program Files/csound"
-  
+
           "C:/Program Files/csound" | Out-File -FilePath $env:GITHUB_PATH -Append
           # [Environment]::SetEnvisronmentVariable("PATH", $Env:PATH + ";C:/Program Files/csound", [EnvironmentVariableTarget]::Machine)
           $Env:Path = $Env:Path + ";C:/Program Files/csound"
@@ -107,32 +107,32 @@ jobs:
           # Write-Output $Env:PATH
           csound.exe --version
 
-      - name: windows setup csound 7
-        if: runner.os == 'windows' && matrix.csound-branch == 'develop'
-        env:
-          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-        run: |
-          git clone -b develop https://github.com/csound/csound --depth 1
-          cd csound
-          git submodule update --init --recursive
+      # - name: windows setup csound 7
+      #   if: runner.os == 'windows' && matrix.csound-branch == 'develop'
+      #   env:
+      #     VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      #   run: |
+      #     git clone -b develop https://github.com/csound/csound --depth 1
+      #     cd csound
+      #     git submodule update --init --recursive
 
-          choco install -y winflexbison3 innosetup
-          .\vcpkg\bootstrap-vcpkg.bat
-          cmake -B build -S . -DBUILD_TESTS=0 -DUSE_VCPKG=1 -DCUSTOM_CMAKE="./platform/windows/Custom-vs.cmake" -DBUILD_JAVA_INTERFACE=OFF -DBUILD_TESTS=OFF
-          cmake --build build --config Release
-          # ls -r .
-          New-Item -Type Directory -Force "C:/Program Files/csound"
-          cp build/Release/*.exe "C:/Program Files/csound"
-          cp build/Release/*.dll "C:/Program Files/csound"
-          cp build/Release/*.lib "C:/Program Files/csound"
+      #     choco install -y winflexbison3 innosetup
+      #     .\vcpkg\bootstrap-vcpkg.bat
+      #     cmake -B build -S . -DBUILD_TESTS=0 -DUSE_VCPKG=1 -DCUSTOM_CMAKE="./platform/windows/Custom-vs.cmake" -DBUILD_JAVA_INTERFACE=OFF -DBUILD_TESTS=OFF
+      #     cmake --build build --config Release
+      #     # ls -r .
+      #     New-Item -Type Directory -Force "C:/Program Files/csound"
+      #     cp build/Release/*.exe "C:/Program Files/csound"
+      #     cp build/Release/*.dll "C:/Program Files/csound"
+      #     cp build/Release/*.lib "C:/Program Files/csound"
 
-          # $machinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
-          # [System.Environment]::SetEnvironmentVariable("PATH", $Env:PATH + ";C:/Program Files/csound", [EnvironmentVariableTarget]::Machine)
-          # [System.Environment]::SetEnvironmentVariable("PATH", $machinePath + ";C:/Program Files/csound", [EnvironmentVariableTarget]::Machine)
-          $Env:Path = $Env:Path + ";C:/Program Files/csound"
+      #     # $machinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+      #     # [System.Environment]::SetEnvironmentVariable("PATH", $Env:PATH + ";C:/Program Files/csound", [EnvironmentVariableTarget]::Machine)
+      #     # [System.Environment]::SetEnvironmentVariable("PATH", $machinePath + ";C:/Program Files/csound", [EnvironmentVariableTarget]::Machine)
+      #     $Env:Path = $Env:Path + ";C:/Program Files/csound"
 
-          # Write-Output $Env:PATH
-          csound.exe --version
+      #     # Write-Output $Env:PATH
+      #     csound.exe --version
 
       - name: install from repo
         if: ${{ matrix.install-method == 'git' }}
