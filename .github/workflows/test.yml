@@ -88,7 +88,7 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: windows setup csound 7 from package
-        if: runner.os == 'windows' && matrix.csound-brach == 'develop'
+        if: runner.os == 'windows' && matrix.csound-branch == 'develop'
         run: |
           $winpkg = "csound-windows-x86-7.0.0-beta.10"
           curl -L -o csound-binaries.zip https://github.com/csound/csound/releases/download/7.0.0-beta.10/$winpkg.zip
