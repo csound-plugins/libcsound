@@ -6,14 +6,14 @@ import os
 from .common import BUILDING_DOCS
 
 
-def csoundLibraryName() -> str:
+def csoundLibraryNames() -> list[str]:
     platform = sys.platform
     if platform.startswith('linux'):
-        return 'csound64'
+        return ['csound64']
     elif platform.startswith('win'):
-        return 'csound64'
+        return ['csound64', 'csound']
     elif platform.startswith('darwin'):
-        return 'CsoundLib64'
+        return ['CsoundLib64']
     else:
         raise RuntimeError(f"Platform '{platform}' not supported")
 
@@ -42,17 +42,16 @@ def csoundDLL() -> tuple[ct.CDLL, str]:
             libname = ctypes.util.find_library("csound64")
             if libname is None:
                 raise ImportError("Did not find csound library in linux")
-    else:
-        libname = csoundLibraryName()
-    path = ctypes.util.find_library(libname)
-    if path is None:
-        if sys.platform.startswith('win'):
-            PATH = os.environ.get('PATH')
-            raise ImportError(f"Csound library not found (searched for '{libname}'. "
-                              f"Make sure that csound is installed and the directory containing "
-                              f"csound64.dll is in the path. PATH='{PATH}'")
-        raise ImportError(f"Csound library not found (searched for '{libname}') - Make sure that csound is installed")
-    _libcsound = ct.CDLL(path)
-    _libcsoundpath = path
+            return ct.CDLL(libname), libname
+    libnames = csoundLibraryNames()
+    for libname in libnames:
+        path = ctypes.util.find_library(libname)
+        if path:
+            return ct.CDLL(path), path
 
-    return _libcsound, _libcsoundpath
+    if sys.platform.startswith('win'):
+        PATH = os.environ.get('PATH')
+        raise ImportError(f"Csound library not found (searched for '{libnames}'. "
+                          f"Make sure that csound is installed and the directory containing "
+                          f"csound64.dll is in the path. PATH='{PATH}'")
+    raise ImportError(f"Csound library not found (searched for '{libnames}') - Make sure that csound is installed")
