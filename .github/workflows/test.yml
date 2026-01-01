@@ -8,7 +8,7 @@ jobs:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         python-version: ["3.10", "3.13"]
         install-method: ["git"]
-        csound-branch: ["csound6", "develop"]
+        csound-branch: ["csound6", "develop", "develop-release"]
       fail-fast: false
 
     steps:
@@ -86,6 +86,26 @@ jobs:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: windows setup csound 7 from package
+        if: runner.os == 'windows' && matrix.csound-brach == 'develop-release'
+        run: |
+          $winpkg = "csound-windows-x86-7.0.0-beta.10"
+          curl -L -o csound-binaries.zip https://github.com/csound/csound/releases/download/7.0.0-beta.10/$winpkg.zip
+          Expand-Archive csound-binaries.zip
+          ls -r
+          New-Item -ItemType Directory -Force -Path "C:\Program Files\csound"
+  
+          Move-Item -Path csound-binaries\$winpkg\build\* -Destination "C:/Program Files/csound"
+          ls -r "C:/Program Files/csound"
+  
+          "C:/Program Files/csound" | Out-File -FilePath $env:GITHUB_PATH -Append
+          # [Environment]::SetEnvisronmentVariable("PATH", $Env:PATH + ";C:/Program Files/csound", [EnvironmentVariableTarget]::Machine)
+          $Env:Path = $Env:Path + ";C:/Program Files/csound"
+          echo "$PATH"
+
+          # Write-Output $Env:PATH
+          csound.exe --version
 
       - name: windows setup csound 7
         if: runner.os == 'windows' && matrix.csound-branch == 'develop'
