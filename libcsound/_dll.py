@@ -53,5 +53,5 @@ def csoundDLL() -> tuple[ct.CDLL, str]:
         PATH = os.environ.get('PATH')
         raise ImportError(f"Csound library not found (searched for '{libnames}'. "
                           f"Make sure that csound is installed and the directory containing "
-                          f"csound64.dll is in the path. PATH='{PATH}'")
+                          f"csound64.dll or csound.dll is in the path. PATH='{PATH}'")
     raise ImportError(f"Csound library not found (searched for '{libnames}') - Make sure that csound is installed")
