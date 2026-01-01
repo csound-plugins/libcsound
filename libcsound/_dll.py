@@ -54,7 +54,7 @@ def csoundDLL() -> tuple[ct.CDLL, str]:
             _libcsoundpath = path
             return _libcsound, _libcsoundpath
         except OSError as e:
-            raise OSError(f"Could not load dll from {path}") from e
+            raise OSError(f"Could not load dll from {path}: {e}") from e
 
     if sys.platform.startswith('win'):
         PATH = os.environ.get('PATH')
