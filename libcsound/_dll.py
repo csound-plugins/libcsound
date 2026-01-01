@@ -35,19 +35,26 @@ def csoundDLL() -> tuple[ct.CDLL, str]:
     if sys.platform == 'linux':
         try:
             dll = ct.CDLL("libcsound64.so")
-            _libcsound = dll
-            _libcsoundpath = "libcsound64.so"
-            return dll, "libcsound64.so"
+            _libcsound, _libcsoundpath = dll, "libcsound64.so"
+            return _libcsound, _libcsoundpath
         except OSError:
             libname = ctypes.util.find_library("csound64")
             if libname is None:
                 raise ImportError("Did not find csound library in linux")
-            return ct.CDLL(libname), libname
+            _libcsound = ct.CDLL(libname)
+            _libcsoundpath = libname
+            return _libcsound, _libcsoundpath
     libnames = csoundLibraryNames()
     for libname in libnames:
         path = ctypes.util.find_library(libname)
-        if path:
-            return ct.CDLL(path), path
+        if not path:
+            continue
+        try:
+            _libcsound = ct.CDLL(path)
+            _libcsoundpath = path
+            return _libcsound, _libcsoundpath
+        except OSError as e:
+            raise(f"Could not load dll from {path}, exception: {e}")
 
     if sys.platform.startswith('win'):
         PATH = os.environ.get('PATH')
