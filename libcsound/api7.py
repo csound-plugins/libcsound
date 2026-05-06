@@ -77,6 +77,15 @@ class CsoundParams(ct.Structure):
         ("mp3_mode", ct.c_int32),           # MP3 encoding mode
         ("redef", ct.c_int32)]              # instr redefinition flag
 
+
+class UgenOpcodeInfo(ct.Structure):
+    """Mirrors the C UGEN_OPCODE_INFO struct."""
+    _fields_ = [("opname", ct.c_char_p),
+                ("outypes", ct.c_char_p),
+                ("intypes", ct.c_char_p),
+                ("dsblksiz", ct.c_size_t),
+                ("flags", ct.c_int32)]
+
 #
 # PVSDAT window types
 #
@@ -158,6 +167,25 @@ PROCESSFUNC = ct.CFUNCTYPE(None, ct.c_void_p)
 EVALCODEFUNC = ct.CFUNCTYPE(None, MYFLT)
 REQUESTCALLBACKFUNC = ct.CFUNCTYPE(None, ct.c_void_p)
 
+#
+# UGen API types and function signatures
+#
+
+# UGEN_ARG_TYPE enum values
+UGEN_ARG_TYPE_I       = 0
+UGEN_ARG_TYPE_K       = 1
+UGEN_ARG_TYPE_A       = 2
+UGEN_ARG_TYPE_S       = 3
+UGEN_ARG_TYPE_F       = 4
+UGEN_ARG_TYPE_UNKNOWN = 5
+
+# Opaque pointers for UGen API structs
+UGEN_p = ct.c_void_p
+UGEN_FACTORY_p = ct.c_void_p
+UGEN_CONTEXT_p = ct.c_void_p
+UGEN_GRAPH_p = ct.c_void_p
+UGEN_VAR_p = ct.c_void_p
+
 
 def _declareAPI(libcsound, libcspt):
     # Instantiation
@@ -201,7 +229,7 @@ def _declareAPI(libcsound, libcspt):
     libcsound.csoundSystemSr.argtypes = [CSOUND_p, MYFLT]
     libcsound.csoundGetModule.restype = ct.c_int32
     libcsound.csoundGetModule.argtypes = [CSOUND_p, ct.c_int,
-                                        ct.POINTER(ct.c_char_p), ct.POINTER(ct.c_char_p)]
+                                          ct.POINTER(ct.c_char_p), ct.POINTER(ct.c_char_p)]
     libcsound.csoundGetAudioDevList.restype = ct.c_int32
     libcsound.csoundGetAudioDevList.argtypes = [CSOUND_p, ct.c_void_p, ct.c_int32]
     libcsound.csoundGetMIDIDevList.restype = ct.c_int32
@@ -237,6 +265,14 @@ def _declareAPI(libcsound, libcspt):
     # Realtime MIDI I/O
     libcsound.csoundSetHostMIDIIO.argtypes = [CSOUND_p]
     libcsound.csoundSetMIDIModule.argtypes = [CSOUND_p, ct.c_char_p]
+    MIDIINOPENFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.POINTER(ct.c_void_p), ct.c_char_p)
+    MIDIREADFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.c_void_p, ct.c_char_p, ct.c_int32)
+    MIDIINCLOSEFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.c_void_p)
+    MIDIOUTOPENFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.POINTER(ct.c_void_p), ct.c_char_p)
+    MIDIWRITEFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.c_void_p, ct.c_char_p, ct.c_int32)
+    MIDIOUTCLOSEFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.c_void_p)
+    MIDIERRORFUNC = ct.CFUNCTYPE(ct.c_char_p, ct.c_int32)
+    MIDIDEVLISTFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.POINTER(CsoundMidiDevice), ct.c_int32)
     libcsound.csoundSetExternalMidiInOpenCallback.argtypes = [CSOUND_p, MIDIINOPENFUNC]
     libcsound.csoundSetExternalMidiReadCallback.argtypes = [CSOUND_p, MIDIREADFUNC]
     libcsound.csoundSetExternalMidiInCloseCallback.argtypes = [CSOUND_p, MIDIINCLOSEFUNC]
@@ -249,6 +285,7 @@ def _declareAPI(libcsound, libcspt):
     # Messages
     libcsound.csoundMessage.argtypes = [CSOUND_p, ct.c_char_p, ct.c_char_p]
     libcsound.csoundMessageS.argtypes = [CSOUND_p, ct.c_int32, ct.c_char_p, ct.c_char_p]
+    MSGSTRFUNC = ct.CFUNCTYPE(None, CSOUND_p, ct.c_int32, ct.c_char_p)
     libcsound.csoundSetMessageStringCallback.argtypes = [CSOUND_p, MSGSTRFUNC]
     libcsound.csoundCreateMessageBuffer.argtypes = [CSOUND_p, ct.c_int32]
     libcsound.csoundGetFirstMessage.restype = ct.c_char_p
@@ -263,7 +300,7 @@ def _declareAPI(libcsound, libcspt):
     # Channels, Controls and Events
     libcsound.csoundGetChannelPtr.restype = ct.c_int32
     libcsound.csoundGetChannelPtr.argtypes = [CSOUND_p, ct.POINTER(ct.c_void_p),
-                                            ct.c_char_p, ct.c_int32]
+                                              ct.c_char_p, ct.c_int32]
     libcsound.csoundGetChannelVarTypeName.restype = ct.c_char_p
     libcsound.csoundGetChannelVarTypeName.argtypes = [CSOUND_p, ct.c_char_p]
     libcsound.csoundListChannels.restype = ct.c_int32
@@ -273,7 +310,7 @@ def _declareAPI(libcsound, libcspt):
     libcsound.csoundSetControlChannelHints.argtypes = [CSOUND_p, ct.c_char_p, ControlChannelHints]
     libcsound.csoundGetControlChannelHints.restype = ct.c_int32
     libcsound.csoundGetControlChannelHints.argtypes = [CSOUND_p, ct.c_char_p,
-                                                    ct.POINTER(ControlChannelHints)]
+                                                       ct.POINTER(ControlChannelHints)]
     libcsound.csoundLockChannel.argtypes = [CSOUND_p, ct.c_char_p]
     libcsound.csoundUnlockChannel.argtypes = [CSOUND_p, ct.c_char_p]
     libcsound.csoundGetControlChannel.restype = MYFLT
@@ -286,7 +323,7 @@ def _declareAPI(libcsound, libcspt):
 
     libcsound.csoundInitArrayChannel.restype = ARRAYDAT_p
     libcsound.csoundInitArrayChannel.argtypes = [CSOUND_p, ct.c_char_p, ct.c_char_p,
-                                                ct.c_int32, ct.POINTER(ct.c_int32)]
+                                                 ct.c_int32, ct.POINTER(ct.c_int32)]
     libcsound.csoundArrayDataType.restype = ct.c_char_p
     libcsound.csoundArrayDataType.argtypes = [ARRAYDAT_p]
     libcsound.csoundArrayDataDimensions.restype = ct.c_int32
@@ -301,8 +338,8 @@ def _declareAPI(libcsound, libcspt):
     libcsound.csoundSetStringData.argtypes = [CSOUND_p, STRINGDAT_p, ct.c_char_p]
     libcsound.csoundInitPvsChannel.restype = PVSDAT_p
     libcsound.csoundInitPvsChannel.argtypes = [CSOUND_p, ct.c_char_p,
-                                            ct.c_int32, ct.c_int32, ct.c_int32,
-                                            ct.c_int32, ct.c_int32]
+                                               ct.c_int32, ct.c_int32, ct.c_int32,
+                                               ct.c_int32, ct.c_int32]
     libcsound.csoundPvsDataFFTSize.restype = ct.c_int32
     libcsound.csoundPvsDataFFTSize.argtypes = [PVSDAT_p]
     libcsound.csoundPvsDataOverlap.restype = ct.c_int32
@@ -318,16 +355,18 @@ def _declareAPI(libcsound, libcspt):
     libcsound.csoundSetPvsData.argtypes = [PVSDAT_p, ct.POINTER(ct.c_float)]
     libcsound.csoundGetChannelDatasize.restype = ct.c_int32
     libcsound.csoundGetChannelDatasize.argtypes = [CSOUND_p, ct.c_char_p]
+    CHANNELFUNC = ct.CFUNCTYPE(None, CSOUND_p, ct.c_char_p, ct.c_void_p, ct.c_void_p)
     libcsound.csoundSetInputChannelCallback.argtypes = [CSOUND_p, CHANNELFUNC]
     libcsound.csoundSetOutputChannelCallback.argtypes = [CSOUND_p, CHANNELFUNC]
     libcsound.csoundEvent.argtypes = [CSOUND_p, ct.c_int32, ct.POINTER(MYFLT),
-                                    ct.c_int32, ct.c_int32]
+                                      ct.c_int32, ct.c_int32]
     libcsound.csoundEventString.argtypes = [CSOUND_p, ct.c_char_p, ct.c_int32]
     libcsound.csoundGetInstrNumber.argtypes = [CSOUND_p, ct.c_char_p]
     libcsound.csoundKeyPress.argtypes = [CSOUND_p, ct.c_char]
+    KEYBOARDFUNC = ct.CFUNCTYPE(ct.c_int32, ct.py_object, ct.c_void_p, ct.c_uint32)
     libcsound.csoundRegisterKeyboardCallback.restype = ct.c_int32
     libcsound.csoundRegisterKeyboardCallback.argtypes = [CSOUND_p, KEYBOARDFUNC,
-                                                        ct.py_object, ct.c_uint32]
+                                                         ct.py_object, ct.c_uint32]
     libcsound.csoundRemoveKeyboardCallback.argtypes = [CSOUND_p, KEYBOARDFUNC]
 
     # Tables
@@ -353,10 +392,116 @@ def _declareAPI(libcsound, libcspt):
     # Opcodes
     libcsound.csoundLoadPlugins.restype = ct.c_int32
     libcsound.csoundLoadPlugins.argtypes = [CSOUND_p, ct.c_char_p]
+    OPCODEFUNC = ct.CFUNCTYPE(ct.c_int32, CSOUND_p, ct.c_void_p)
     libcsound.csoundAppendOpcode.restype = ct.c_int32
     libcsound.csoundAppendOpcode.argtypes = [CSOUND_p, ct.c_char_p, ct.c_int32,
         ct.c_int32, ct.c_char_p, ct.c_char_p,
         OPCODEFUNC, OPCODEFUNC, OPCODEFUNC]
+
+
+    # Factory API
+    libcsound.csoundUgenFactoryNew.restype = UGEN_FACTORY_p
+    libcsound.csoundUgenFactoryNew.argtypes = [CSOUND_p]
+    libcsound.csoundUgenFactoryDelete.restype = ct.c_bool
+    libcsound.csoundUgenFactoryDelete.argtypes = [UGEN_FACTORY_p]
+
+    # Context API
+    libcsound.csoundUgenContextNew.restype = UGEN_CONTEXT_p
+    libcsound.csoundUgenContextNew.argtypes = [UGEN_FACTORY_p]
+    libcsound.csoundUgenContextDelete.restype = ct.c_bool
+    libcsound.csoundUgenContextDelete.argtypes = [UGEN_CONTEXT_p]
+    libcsound.csoundUgenSetContext.restype = ct.c_bool
+    libcsound.csoundUgenSetContext.argtypes = [UGEN_p, UGEN_CONTEXT_p]
+
+    # UGen creation/destruction
+    libcsound.csoundUgenNew.restype = UGEN_p
+    libcsound.csoundUgenNew.argtypes = [UGEN_FACTORY_p, ct.c_char_p, ct.c_char_p, ct.c_char_p]
+    libcsound.csoundUgenDelete.restype = ct.c_bool
+    libcsound.csoundUgenDelete.argtypes = [UGEN_p]
+
+    # UGEN_VAR: variable handle accessors
+    libcsound.csoundUgenGetOutVar.restype = UGEN_VAR_p
+    libcsound.csoundUgenGetOutVar.argtypes = [UGEN_p, ct.c_int32]
+    libcsound.csoundUgenGetInVar.restype = UGEN_VAR_p
+    libcsound.csoundUgenGetInVar.argtypes = [UGEN_p, ct.c_int32]
+    libcsound.csoundUgenSetInputVar.restype = ct.c_bool
+    libcsound.csoundUgenSetInputVar.argtypes = [UGEN_p, ct.c_int32, UGEN_VAR_p]
+
+    # UGEN_VAR: standalone creation/deletion
+    libcsound.csoundUgenVarNew.restype = UGEN_VAR_p
+    libcsound.csoundUgenVarNew.argtypes = [UGEN_FACTORY_p, ct.c_int32]
+    libcsound.csoundUgenVarDelete.restype = ct.c_bool
+    libcsound.csoundUgenVarDelete.argtypes = [UGEN_VAR_p]
+
+    # UGEN_VAR: type and size query
+    libcsound.csoundUgenVarGetType.restype = ct.c_int32
+    libcsound.csoundUgenVarGetType.argtypes = [UGEN_VAR_p]
+    libcsound.csoundUgenVarGetSize.restype = ct.c_size_t
+    libcsound.csoundUgenVarGetSize.argtypes = [UGEN_VAR_p]
+
+    # UGEN_VAR: scalar value access
+    libcsound.csoundUgenVarSetValue.argtypes = [UGEN_VAR_p, MYFLT]
+    libcsound.csoundUgenVarGetValue.restype = MYFLT
+    libcsound.csoundUgenVarGetValue.argtypes = [UGEN_VAR_p]
+
+    # UGEN_VAR: raw data pointer access
+    libcsound.csoundUgenVarGetData.restype = ct.c_void_p
+    libcsound.csoundUgenVarGetData.argtypes = [UGEN_VAR_p]
+
+    # UGEN_VAR: string value access
+    libcsound.csoundUgenVarSetString.restype = ct.c_bool
+    libcsound.csoundUgenVarSetString.argtypes = [UGEN_VAR_p, ct.c_char_p]
+    libcsound.csoundUgenVarGetString.restype = ct.c_char_p
+    libcsound.csoundUgenVarGetString.argtypes = [UGEN_VAR_p]
+
+    # UGEN convenience: scalar/string access by index
+    libcsound.csoundUgenSetValue.argtypes = [UGEN_p, ct.c_int32, MYFLT]
+    libcsound.csoundUgenGetValue.restype = MYFLT
+    libcsound.csoundUgenGetValue.argtypes = [UGEN_p, ct.c_int32]
+    libcsound.csoundUgenSetString.restype = ct.c_bool
+    libcsound.csoundUgenSetString.argtypes = [UGEN_p, ct.c_int32, ct.c_char_p]
+    libcsound.csoundUgenGetString.restype = ct.c_char_p
+    libcsound.csoundUgenGetString.argtypes = [UGEN_p, ct.c_int32]
+
+    # Argument query
+    libcsound.csoundUgenGetInCount.restype = ct.c_int32
+    libcsound.csoundUgenGetInCount.argtypes = [UGEN_p]
+    libcsound.csoundUgenGetOutCount.restype = ct.c_int32
+    libcsound.csoundUgenGetOutCount.argtypes = [UGEN_p]
+    libcsound.csoundUgenGetInType.restype = ct.c_int32
+    libcsound.csoundUgenGetInType.argtypes = [UGEN_p, ct.c_int32]
+    libcsound.csoundUgenGetOutType.restype = ct.c_int32
+    libcsound.csoundUgenGetOutType.argtypes = [UGEN_p, ct.c_int32]
+
+    # Init/Perform
+    libcsound.csoundUgenInit.restype = ct.c_int32
+    libcsound.csoundUgenInit.argtypes = [UGEN_p]
+    libcsound.csoundUgenPerform.restype = ct.c_int32
+    libcsound.csoundUgenPerform.argtypes = [UGEN_p]
+
+    # Opcode listing API
+    libcsound.csoundUgenListOpcodes.restype = ct.c_int32
+    libcsound.csoundUgenListOpcodes.argtypes = [UGEN_FACTORY_p, ct.POINTER(ct.POINTER(UgenOpcodeInfo)), ct.POINTER(ct.c_int32)]
+    libcsound.csoundUgenFreeOpcodeList.restype = None
+    libcsound.csoundUgenFreeOpcodeList.argtypes = [UGEN_FACTORY_p, ct.POINTER(UgenOpcodeInfo)]
+    libcsound.csoundUgenFindOpcode.restype = ct.c_bool
+    libcsound.csoundUgenFindOpcode.argtypes = [UGEN_FACTORY_p, ct.c_char_p, ct.c_char_p, ct.c_char_p]
+
+    # Graph API
+    libcsound.csoundUgenGraphNew.restype = UGEN_GRAPH_p
+    libcsound.csoundUgenGraphNew.argtypes = [UGEN_FACTORY_p]
+    libcsound.csoundUgenGraphAdd.restype = ct.c_int32
+    libcsound.csoundUgenGraphAdd.argtypes = [UGEN_GRAPH_p, UGEN_p]
+    libcsound.csoundUgenGraphInit.restype = ct.c_int32
+    libcsound.csoundUgenGraphInit.argtypes = [UGEN_GRAPH_p]
+    libcsound.csoundUgenGraphPerform.restype = ct.c_int32
+    libcsound.csoundUgenGraphPerform.argtypes = [UGEN_GRAPH_p]
+    libcsound.csoundUgenGraphDelete.restype = ct.c_bool
+    libcsound.csoundUgenGraphDelete.argtypes = [UGEN_GRAPH_p]
+    libcsound.csoundUgenGraphDeleteAll.restype = ct.c_bool
+    libcsound.csoundUgenGraphDeleteAll.argtypes = [UGEN_GRAPH_p]
+
+    # Performance Thread
 
     libcspt.csoundCreatePerformanceThread.restype = CSOUNDPERFTHREAD_p
     libcspt.csoundCreatePerformanceThread.argtypes = [CSOUND_p]
@@ -3183,6 +3328,441 @@ class PerformanceThread:
             absolute: if True, use absolute time
         """
         self.scoreEvent(absolute, "e", [0, time])
+
+
+# =============================================================================
+#  UGen API wrapper classes
+# =============================================================================
+
+class UgenFactory:
+    """Creates and manages UGen (opcode) instances.
+
+    The Csound instance should be configured for sr and ksmps before
+    creating a factory.
+
+    Example::
+
+        cs = Csound()
+        cs.compileOrc("instr 1\\nendin", 0)
+        cs.start()
+        factory = UgenFactory(cs)
+        osc = factory.new_ugen("oscils", "a", "iiio")
+        ...
+        del factory  # or factory.delete()
+    """
+
+    def __init__(self, csound: Csound):
+        """Create a new UgenFactory from a Csound instance.
+
+        Args:
+            csound: A Csound instance (the libcsound.Csound object).
+        """
+        self.cs = csound
+        self.factory = libcsound.csoundUgenFactoryNew(csound.cs)
+        if not self.factory:
+            raise RuntimeError("Failed to create UGEN_FACTORY")
+
+    def __del__(self):
+        self.delete()
+
+    def delete(self):
+        """Free the factory. Safe to call multiple times."""
+        if self.factory:
+            libcsound.csoundUgenFactoryDelete(self.factory)
+            self.factory = None
+
+    def newUgen(self, opcodeName: str, outTypes: str, inTypes: str) -> Ugen | None:
+        """Create a new Ugen for the named opcode.
+
+        Args:
+            opcodeName:   Opcode name (e.g. "oscils").
+            outTypes: Output type string (e.g. "a").
+            inTypes:  Input type string (e.g. "iiio").
+
+        Returns:
+            A Ugen instance, or None if the opcode/types could not be resolved.
+        """
+        ptr = libcsound.csoundUgenNew(
+            self.factory,
+            cstring(opcodeName), cstring(outTypes), cstring(inTypes))
+        return Ugen(ptr, self) if ptr else None
+
+    def listOpcodes(self):
+        """Return a list of available opcodes as dicts.
+
+        Each dict has keys: opname, outypes, intypes, dsblksiz, flags.
+        """
+        info_p = ct.POINTER(UgenOpcodeInfo)()
+        count = ct.c_int32(0)
+        ret = libcsound.csoundUgenListOpcodes(
+            self.factory, ct.byref(info_p), ct.byref(count))
+        if ret != 0:
+            return []
+        result = []
+        for i in range(count.value):
+            entry = info_p[i]
+            result.append({
+                'opname': pstring(entry.opname) if entry.opname else '',
+                'outypes': pstring(entry.outypes) if entry.outypes else '',
+                'intypes': pstring(entry.intypes) if entry.intypes else '',
+                'dsblksiz': entry.dsblksiz,
+                'flags': entry.flags,
+            })
+        libcsound.csoundUgenFreeOpcodeList(self.factory, info_p)
+        return result
+
+    def findOpcode(self, opName: str, outTypes: str | None = None, inTypes: str | None = None
+                   ) -> bool:
+        """Check if an opcode with the given name and types exists.
+
+        Args:
+            opName:   Opcode name.
+            outTypes: Output type string, or None for any.
+            inTypes:  Input type string, or None for any.
+
+        Returns:
+            True if the opcode exists, False otherwise.
+        """
+        return libcsound.csoundUgenFindOpcode(
+            self.factory,
+            cstring(opName),
+            cstring(outTypes) if outTypes else None,
+            cstring(inTypes) if inTypes else None)
+
+    def newGraph(self) -> UgenGraph | None:
+        """Create a new empty UgenGraph."""
+        ptr = libcsound.csoundUgenGraphNew(self.factory)
+        return UgenGraph(ptr, self) if ptr else None
+
+    def newContext(self) -> UgenContext | None:
+        """Create a new UgenContext for instrument-like state."""
+        ptr = libcsound.csoundUgenContextNew(self.factory)
+        return UgenContext(ptr) if ptr else None
+
+    def newVar(self, arg: int) -> UgenVar | None:
+        """Create a standalone UGEN_VAR with its own memory.
+
+        Args:
+            arg: One of UGEN_ARG_TYPE_I, UGEN_ARG_TYPE_K,
+                 UGEN_ARG_TYPE_A, UGEN_ARG_TYPE_S, UGEN_ARG_TYPE_F
+
+        Returns:
+            A UgenVar instance, or None on failure.
+        """
+        ptr = libcsound.csoundUgenVarNew(self.factory, arg)
+        return UgenVar(ptr) if ptr else None
+
+
+class Ugen:
+    """A single instantiated Csound opcode (unit generator).
+
+    Created via UgenFactory.newUgen(). Do not instantiate directly.
+    """
+
+    def __init__(self, ptr, factory=None):
+        self.ugen = ptr
+        self._factory = factory  # prevent GC of factory while ugen alive
+        self._context = None     # set by set_context()
+
+    def __del__(self):
+        self.delete()
+
+    def delete(self):
+        """Free the ugen. Safe to call multiple times."""
+        if self.ugen:
+            libcsound.csoundUgenDelete(self.ugen)
+            self.ugen = None
+
+    # UGEN_VAR accessors
+
+    def getOutVar(self, index: int) -> UgenVar | None:
+        """Get a UgenVar handle for the output argument at index.
+
+        Returns:
+            A UgenVar (non-owning) or None if out of range.
+        """
+        ptr = libcsound.csoundUgenGetOutVar(self.ugen, index)
+        return UgenVar(ptr, owned=False) if ptr else None
+
+    def getInVar(self, index: int) -> UgenVar | None:
+        """Get a UgenVar handle for the input argument at index.
+
+        Returns:
+            A UgenVar (non-owning) or None if out of range.
+        """
+        ptr = libcsound.csoundUgenGetInVar(self.ugen, index)
+        return UgenVar(ptr, owned=False) if ptr else None
+
+    def setInputVar(self, index: int, var: UgenVar) -> bool:
+        """Wire a UgenVar to this ugen's input at index.
+
+        This is used for zero-copy connections between UGENs:
+
+            src_var = src_ugen.get_out_var(0)
+            dst_ugen.set_input_var(0, src_var)
+
+        Args:
+            index: Input argument index.
+            var:   A UgenVar instance (or raw UGEN_VAR_p).
+        """
+        var_p = var.var if isinstance(var, UgenVar) else var
+        return libcsound.csoundUgenSetInputVar(self.ugen, index, var_p)
+
+    # Convenience: scalar access by index
+
+    def setValue(self, index: int, value: float) -> None:
+        """Set a scalar (i/k-rate) value on input argument at index.
+
+        Convenience shorthand for::
+
+            ugen.get_in_var(index).set_value(value)
+
+        Best for one-off init-time setup.  In a per-k-cycle loop,
+        prefer caching the UgenVar handle::
+
+            freq_var = ugen.get_in_var(1)   # cache once
+            for ...:                         # tight loop
+                freq_var.set_value(new_freq)
+        """
+        libcsound.csoundUgenSetValue(self.ugen, index, MYFLT(value))
+
+    def getValue(self, index: int) -> float:
+        """Get a scalar value from output argument at index.
+
+        Convenience shorthand for::
+
+            ugen.get_out_var(index).get_value()
+
+        In a tight loop, prefer caching the UgenVar handle.
+        """
+        return float(libcsound.csoundUgenGetValue(self.ugen, index))
+
+    # Convenience: string access by index
+
+    def setString(self, index: int, s: str) -> None:
+        """Set a string on input argument at index (S-type only).
+
+        Convenience shorthand for::
+
+            ugen.get_in_var(index).set_string(s)
+        """
+        return libcsound.csoundUgenSetString(self.ugen, index, cstring(s))
+
+    def getString(self, index: int) -> str | None:
+        """Get a string from output argument at index (S-type only).
+
+        Convenience shorthand for::
+
+            ugen.get_out_var(index).get_string()
+        """
+        s = libcsound.csoundUgenGetString(self.ugen, index)
+        return pstring(s) if s else None
+
+    # Query
+
+    @property
+    def inCount(self) -> int:
+        """Number of input arguments."""
+        return libcsound.csoundUgenGetInCount(self.ugen)
+
+    @property
+    def outCount(self) -> int:
+        """Number of output arguments."""
+        return libcsound.csoundUgenGetOutCount(self.ugen)
+
+    def getInType(self, index: int) -> int:
+        """Get the UGEN_ARG_TYPE for input argument at index."""
+        return libcsound.csoundUgenGetInType(self.ugen, index)
+
+    def getOutType(self, index: int) -> int:
+        """Get the UGEN_ARG_TYPE for output argument at index."""
+        return libcsound.csoundUgenGetOutType(self.ugen, index)
+
+    # Context
+
+    def setContext(self, context: UgenContext) -> None:
+        """Associate this ugen with a UgenContext.
+
+        Must be called before init() if the opcode needs
+        instrument-like state (hold, release, MIDI, etc.).
+
+        Args:
+            context: A UgenContext instance.
+        """
+        self._context = context  # prevent GC of context while ugen alive
+        return libcsound.csoundUgenSetContext(self.ugen, context.ctx)
+
+    # Init / Perform
+
+    def init(self) -> None:
+        """Run the opcode's init-pass."""
+        return libcsound.csoundUgenInit(self.ugen)
+
+    def perform(self) -> int:
+        """Run the opcode's perf-pass (one ksmps block)."""
+        return libcsound.csoundUgenPerform(self.ugen)
+
+
+class UgenContext:
+    """Provides instrument-like context (hold/release state) for UGENs.
+
+    Created via UgenFactory.new_context(). Do not instantiate directly.
+    """
+
+    def __init__(self, ptr):
+        self.ctx = ptr
+
+    def __del__(self):
+        self.delete()
+
+    def delete(self):
+        """Free the context. Safe to call multiple times."""
+        if self.ctx:
+            libcsound.csoundUgenContextDelete(self.ctx)
+            self.ctx = None
+
+    def bindUgen(self, ugen: Ugen) -> int:
+        """Associate this context with a Ugen."""
+        assert isinstance(ugen, Ugen)
+        return libcsound.csoundUgenSetContext(ugen.ugen, self.ctx)
+
+
+class UgenGraph:
+    """A graph of connected UGENs that can be performed together.
+
+    Created via UgenFactory.new_graph(). Do not instantiate directly.
+
+    Connections between UGENs are made via UGEN_VAR handles::
+
+        src_var = src_ugen.get_out_var(0)
+        dst_ugen.set_input_var(0, src_var)
+    """
+
+    def __init__(self, ptr, factory):
+        self.graph = ptr
+        self.factory = factory  # prevent GC of factory
+        self._ugens = []  # track Ugen wrappers added to this graph
+
+    def __del__(self):
+        self.delete()
+
+    def delete(self):
+        """Delete the graph (does NOT delete individual UGENs)."""
+        if self.graph:
+            libcsound.csoundUgenGraphDelete(self.graph)
+            self.graph = None
+
+    def deleteAll(self):
+        """Delete the graph AND all UGENs it contains."""
+        if self.graph:
+            libcsound.csoundUgenGraphDeleteAll(self.graph)
+            self.graph = None
+            # Prevent Python Ugen.__del__ from double-freeing
+            for u in self._ugens:
+                u.ugen = None
+            self._ugens.clear()
+
+    def add(self, ugen: Ugen) -> int:
+        """Add a Ugen to the graph. Returns its index, or -1 on error.
+
+        After adding, the graph owns the UGEN memory.  Do NOT call
+        ugen.delete() manually if you plan to use graph.delete_all().
+        """
+        idx = libcsound.csoundUgenGraphAdd(self.graph, ugen.ugen)
+        if idx >= 0:
+            self._ugens.append(ugen)
+        return idx
+
+    def init(self):
+        """Initialize all UGENs in graph order."""
+        return libcsound.csoundUgenGraphInit(self.graph)
+
+    def perform(self) -> int:
+        """Perform one ksmps block for all UGENs."""
+        return libcsound.csoundUgenGraphPerform(self.graph)
+
+
+class UgenVar:
+    """A typed variable handle for UGEN input/output arguments.
+
+    UgenVar objects come in two flavours:
+
+    * **UGEN-owned**: returned by ``Ugen.get_out_var()`` / ``Ugen.get_in_var()``.
+      These share memory with the opcode and must NOT be deleted manually.
+    * **Standalone**: created by ``UgenFactory.new_var()``.
+      These own their own memory and must be deleted when done.
+
+    Example – setting a scalar input::
+
+        var = ugen.get_in_var(0)
+        var.set_value(440.0)
+
+    Example – reading an audio output buffer::
+
+        var = ugen.get_out_var(0)
+        ptr = var.data_ptr         # raw MYFLT* pointer
+        buf = (MYFLT * ksmps).from_address(ptr)
+        samples = list(buf)
+
+    Example – wiring two UGENs::
+
+        src_out = src_ugen.get_out_var(0)
+        dst_ugen.set_input_var(0, src_out)
+    """
+
+    def __init__(self, ptr, owned=True):
+        self.var = ptr
+        self._owned = owned
+
+    def __del__(self):
+        if self._owned:
+            self.delete()
+
+    def delete(self):
+        """Free a standalone var. Safe to call multiple times.
+
+        Do NOT call this on vars obtained from Ugen.get_out_var()/get_in_var().
+        """
+        if self.var and self._owned:
+            libcsound.csoundUgenVarDelete(self.var)
+            self.var = None
+
+    @property
+    def argType(self) -> int:
+        """The UGEN_ARG_TYPE of this variable."""
+        return libcsound.csoundUgenVarGetType(self.var)
+
+    @property
+    def size(self) -> int:
+        """The data size in bytes for the variable's payload."""
+        return libcsound.csoundUgenVarGetSize(self.var)
+
+    def setValue(self, value: float) -> None:
+        """Set a scalar (i/k-rate) value."""
+        libcsound.csoundUgenVarSetValue(self.var, MYFLT(value))
+
+    def getValue(self) -> float:
+        """Get a scalar (i/k-rate) value."""
+        return float(libcsound.csoundUgenVarGetValue(self.var))
+
+    @property
+    def dataPtr(self) -> ct.c_void_p:
+        """Raw pointer to the variable's data buffer.
+
+        For audio-rate vars this points to ksmps MYFLTs.
+        For i/k-rate this points to a single MYFLT.
+        For S-type this points to a STRINGDAT struct.
+        """
+        return libcsound.csoundUgenVarGetData(self.var)
+
+    def setString(self, s: str) -> None:
+        """Set the string value (S-type vars only)."""
+        return libcsound.csoundUgenVarSetString(self.var, cstring(s))
+
+    def getString(self) -> str | None:
+        """Get the string value (S-type vars only)."""
+        s = libcsound.csoundUgenVarGetString(self.var)
+        return pstring(s) if s else None
 
 
 def getSystemSr(module: str = '') -> tuple[float, str]:
