@@ -26,6 +26,8 @@ elif ext == '.mp3':
 elif ext == '.ogg':
     cs.setOption("--format=ogg")
     cs.setOption("--format=vorbis")
+elif args.outfile.startswith("dac"):
+    print("Using realtime audio")
 else:
     assert ext == '.wav'
 
