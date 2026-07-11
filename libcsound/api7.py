@@ -2170,7 +2170,21 @@ class Csound:
     def arrayData(self, adat: ARRAYDAT_p) -> np.ndarray:
         """Get the data from the ARRAYDAT adat."""
         # TODO: construct a numpy array pointing to the returned data
-        return libcsound.csoundGetArrayData(adat)
+        # return libcsound.csoundGetArrayData(adat)
+        type_s = self.arrayDataType(adat)
+        ndim = self.arrayDataDimensions(adat)
+        shape = self.arrayDataSizes(adat)
+        if type_s == "i" or type_s == "k":
+            array_type = np.ctypeslib.ndpointer(MYFLT, ndim, shape, 'C_CONTIGUOUS')
+        elif type_s == "a":
+            array_type = np.ctypeslib.ndpointer(MYFLT*self.sr(), ndim, shape, 'C_CONTIGUOUS')
+        elif type_s == "S":
+            array_type = np.ctypeslib.ndpointer(ct.c_void_p, ndim, shape, 'C_CONTIGUOUS')
+        else:
+            raise TypeError(f"Invalid array type, expected i, k, a or S, got {type_s}")
+        ptr = libcsound.csoundGetArrayData(adat)
+        p = ct.cast(ptr, array_type)
+        return p.contents
 
     # These two functions are using c void * for the data.
     # Not very useful in Python. To be refined.
@@ -3694,20 +3708,20 @@ class UgenVar:
 
     Example – setting a scalar input::
 
-        var = ugen.get_in_var(0)
-        var.set_value(440.0)
+        var = ugen.getInVars(0)
+        var.setValue(440.0)
 
     Example – reading an audio output buffer::
 
-        var = ugen.get_out_var(0)
+        var = ugen.getOutVar(0)
         ptr = var.data_ptr         # raw MYFLT* pointer
         buf = (MYFLT * ksmps).from_address(ptr)
         samples = list(buf)
 
     Example – wiring two UGENs::
 
-        src_out = src_ugen.get_out_var(0)
-        dst_ugen.set_input_var(0, src_out)
+        src_out = src_ugen.getOutVar(0)
+        dst_ugen.setInputVar(0, src_out)
     """
 
     def __init__(self, ptr, owned=True):
