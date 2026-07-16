@@ -27,9 +27,19 @@
 #   License along with Csound; if not, write to the Free Software
 #   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
 #   02110-1301 USA
-#
+
+# Important env variables:
+# * LIBCSOUNDPATH: if given, will be used to load libcsound64. Should be an absolute path
+#   to an existing file. If not given, the library will be searched in the system path.
+# * OPCODE7DIR64: will determine the path were csound looks for plugins. Can include multiple
+#   paths, separated by : in linux/macos or ; in windows
+# * CS_USER_PLUGINDIR: path to user plugins. The path to search for user installed plugins,
+#   set it to an empty string to disable searching for user plugins. This can be needed
+#   if using a portable version of csound, where the user plugins might be compiled for
+#   a different version
 
 from . import common
+
 
 if not common.BUILDING_DOCS:
     # this disables warnings about denormals

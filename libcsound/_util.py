@@ -118,11 +118,14 @@ def realtimeModulesForPlatform(platform='') -> set[str]:
 
 def testCsound(module: str = '',
                sr: float = 0.,
+               ksmps=64,
                outdev='',
                nchnls=2,
                dur=10.,
-               signal='pinker() * 0.2'
-               ) -> None:
+               signal='pinker() * 0.2',
+               opcodeDir='',
+               options: list[str] | None = None
+    ) -> None:
     """
     Test csound
 
@@ -137,8 +140,9 @@ def testCsound(module: str = '',
     """
     if not module:
         module = defaultRealtimeModule()
+
     from . import Csound
-    csound = Csound()
+    csound = Csound(opcodeDir=opcodeDir)
     if outdev:
         csound.setOption(f'-o{outdev}')
     elif module == 'jack':
@@ -146,14 +150,20 @@ def testCsound(module: str = '',
     else:
         csound.setOption('-odac')
 
-    csound.setOption(f'-+rtaudio={module}')
+    if module:
+        csound.setOption(f'-+rtaudio={module}')
+
     if sr <= 0:
         csound.setOption('--use-system-sr')
     else:
         csound.setOption(f'--sample-rate={sr}')
+    if options:
+        for opt in options:
+            csound.setOption(opt)
+
     csound.compileOrc(fr"""
     0dbfs = 1
-    ksmps = 64
+    ksmps = {ksmps}
     nchnls = {nchnls}
 
     instr 1
@@ -166,12 +176,13 @@ def testCsound(module: str = '',
       outch kchan + 1, asig
     endin
     """)
+
     csound.start()
     pt = csound.performanceThread()
     pt.play()
     pt.scoreEvent(False, "i", [1, 0, dur])
     setupSigint(lambda: (pt.stop()))
-    input(">>> Press any key to stop <<< \n")
+    input("\n>>> Press any key to stop <<< \n")
     restoreSigint()
     pt.stop()
     csound.stop()

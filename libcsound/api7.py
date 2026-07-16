@@ -3779,7 +3779,7 @@ class UgenVar:
         return pstring(s) if s else None
 
 
-def getSystemSr(module: str = '') -> tuple[float, str]:
+def getSystemSr(module: str = '', opcodeDir='') -> tuple[float, str]:
     """
     Get the system samplerate reported by csound
 
@@ -3791,6 +3791,7 @@ def getSystemSr(module: str = '') -> tuple[float, str]:
 
     Args:
         module: the module to use, or a default for each platform
+        opcodeDir: the directory to search for opcodes (overrides OPCODE7DIR64 env var)
 
     Returns:
         a tuple (samplerate: float, module: str), where samplerate
@@ -3816,10 +3817,16 @@ def getSystemSr(module: str = '') -> tuple[float, str]:
         modules = _util.realtimeModulesForPlatform()
         if module not in modules:
             raise ValueError(f"Module {module} not known for this platform")
-    csound = Csound()
+    csound = Csound(opcodeDir=opcodeDir)
     csound.createMessageBuffer(echo=False)
+    csound.setOption('-m0')
+    csound.setOption('--suppress-version')
     csound.setOption(f'-+rtaudio={module}')
     csound.setOption(f'-odac')
+    if module == 'jack':
+        # Set buffer size big enough to avoid being it smaller than jack/pipewire buffer size
+        csound.setOption('-B2048')
+        csound.setOption('-b2048')
     csound.setOption('--get-system-sr')
     sr = 0.
     for msg, attr in csound.iterMessages():
@@ -3830,17 +3837,14 @@ def getSystemSr(module: str = '') -> tuple[float, str]:
     return sr, module
 
 
-def _getOpcodes() -> list[OpcodeDef]:
-    cs = Csound()
+def _getOpcodes(opcodeDir='') -> list[OpcodeDef]:
+    cs = Csound(opcodeDir=opcodeDir)
     cs.createMessageBuffer(echo=False)
     cs.setOption('-z1')
-    msgcnt = cs.messageCnt()
     opcodes = []
     parts = []
     _ = _util.asciistr
-    for i in range(cs.messageCnt()):
-        msg = cs.firstMessage()
-        cs.popFirstMessage()
+    for msg, attr in cs.iterMessages():
         msgstripped = msg.strip()
         if msgstripped:
             parts.append(msgstripped)
