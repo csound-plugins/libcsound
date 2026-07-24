@@ -8,9 +8,9 @@ Quick Start
 
 .. note::
 
-    *csound* should be installed before these bindings can be used. Any version of csound
-    after and including ``6.18`` will work with these bindings. **csound 7** is
-    explicitely supported and should work without any changes. See `installation`_.
+    *csound* should be installed before these bindings can be used. Any version 
+    >= 6.18 should work. **csound 7** is explicitely supported and is the recommended
+    version to use. See `installation`_.
 
 
 Rendering in real-time
@@ -36,7 +36,7 @@ The following example shows how to make csound generate audio in real-time.
     sr = 44100   ; Modify to fit your system
     ksmps = 64   ; samples per performance cycle
     nchnls = 2   ; number of output channels
-    0dbfs = 1    ; amplitude scaling factor. Here for atavistic reasons
+    0dbfs = 1    ; amplitude scaling factor. 1.0 = full scale (csound convention)
 
     instr 1
       kchan init -1
@@ -78,9 +78,9 @@ The same code can be run offline (non-realtime mode)
     import libcsound
     csound = libcsound.Csound()
 
-    # Send output to a soundfile 'outfile.flac'. Other formats are supported: wav
-    # mp3, ogg, aiff. The corresponding --format option needs to be added, since it
-    # will not be infered from the extension.
+    # Output to a soundfile 'outfile.flac'. Supported formats include wav, flac,
+    # mp3, ogg and aiff. The format must be given explicitly via --format; it is
+    # not inferred from the extension
     csound.setOption('-ooutfile.flac --format=flac')
 
     csound.compileOrc(r'''
@@ -124,6 +124,17 @@ Installation
 
     pip install libcsound
 
+Csound
+^^^^^^
+
+See https://github.com/csound/csound/releases
+
+**Linux / macOS**
+  .. code::
+
+    curl -fsSL https://csound-plugins.github.io/installer/install.sh | bash
+
+
 
 -------------------------
 
@@ -132,18 +143,17 @@ Compatibility
 
 ``libcsound`` supports both **csound 6** and **csound 7** and provides a compatibility layer
 so that **the same code can be used for any version of csound**. In csound 7 some functions
-have been removed. : these are marked clearly in the documentation. Their
-corresponding method has been kept in the csound 6 API with the indication that it needs to be
-replaced with a compatible alternative in order to write future-proof code.
+have been removed; these are clearly marked in the documentation. In the csound 6 API
+they are still available but marked as deprecated, with a pointer to a portable alternative so you can write
+future-proof code.
 
-.. note:: 
-	Even if csound 7 has not been officially released, it is the best supported version
-	and should be preferred over csound 6.
 
-When ``libcsound`` is imported, the installed csound is queried and based on
-its version the corresponding API is loaded. So whereas the different versions supported
-might differ, for the user there are very little changes. For completeness, however,
-each version has its own documentation, making it clear which methods have changed
-between versions and, particularly, how to write code which is portable across multiple versions.
+.. note::
+    csound 7 is the best supported version at the moment and should be preferred over csound 6.
+
+
+When ``libcsound`` is imported, it queries the installed csound and loads the matching API. Each version has its own
+reference page, so you can see exactly which methods changed and how to write code that is portable across
+versions.
 
 For more information, see :ref:`portability`

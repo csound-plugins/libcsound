@@ -5,18 +5,36 @@ libcsound
 
 Python bindings for Csound (fork of ``ctcsound``)
 
-These bindings can be used with any version of csound >= 6.18. Csound 7 is explicitely supported.
+These bindings can be used with any version of csound >= 6.18. Csound 7 is explicitely supported 
+and is the recommended version.
 
 
 Installation
 ------------
 
-Csound needs to be installed in the system.
+Csound
+^^^^^^
 
+Csound needs to be installed in the system. See https://github.com/csound/csound/releases
+
+In Linux / macOS:
+
+.. code::
+
+   curl -fsSL https://csound-plugins.github.io/installer/install.sh | bash
+
+
+This installs the latest version of csound 7. 
+
+   
+libcsound
+^^^^^^^^^
 
 .. code::
 
 	pip install libcsound
+
+--------------------------------
 
 
 Quick Start

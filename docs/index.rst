@@ -6,12 +6,10 @@
 libcsound
 =========
 
-Python bindings for Csound
+Python bindings for csound
 
 This package can be used with any version of csound >= 6.18.
-**Csound 7 is explicitely supported**. It is for the most part
-compatible with any version of csound without modifications (the
-corresponding API is imported at runtime based on csound's version)
+**csound 7 is explicitly supported**.
 
 
 ------------

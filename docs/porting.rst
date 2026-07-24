@@ -4,8 +4,8 @@
 Portability
 ===========
 
-Deprecated methods in csound 6
-------------------------------
+Methods removed in csound 7 (deprecated in csound 6)
+----------------------------------------------------
 
 These methods do not exist in csound 7 but code can be written which supports the same
 functionality
@@ -77,7 +77,7 @@ or tables.
 ------------------------------------------
 
 
-Not supported methods in csound 7
+Methods not supported in csound 7
 ---------------------------------
 
 These methods exist in csound 6 but have been removed from the API in csound 7.0
@@ -85,7 +85,6 @@ These methods exist in csound 6 but have been removed from the API in csound 7.0
 * :meth:`~libcsound.api6.Csound.parseOrc`
 * :meth:`~libcsound.api6.Csound.setPlayOpenCallback`
 * :meth:`~libcsound.api6.Csound.setRtPlayCallback`
-* :meth:`~libcsound.api6.Csound.setRecordOpenCallback`
 * :meth:`~libcsound.api6.Csound.setRecordOpenCallback`
 * :meth:`~libcsound.api6.Csound.compileTree`
 * :meth:`~libcsound.api6.Csound.compileTreeAsync`
@@ -110,7 +109,6 @@ These methods exist in csound 6 but have been removed from the API in csound 7.0
 * :meth:`~libcsound.api6.Csound.outputBuffer`
 * :meth:`~libcsound.api6.Csound.rtRecordUserData`
 * :meth:`~libcsound.api6.Csound.rtPlayUserData`
-* :meth:`~libcsound.api6.Csound.setRtCloseCallback`
 * :meth:`~libcsound.api6.Csound.registerSenseEventCallback`
 * :meth:`~libcsound.api6.Csound.tableGet`
 * :meth:`~libcsound.api6.Csound.tableSet`
