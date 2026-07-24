@@ -119,8 +119,6 @@ def read_rpath_macos(bin: str, libname: str) -> str:
             return os.path.realpath(candidate)
 
     raise FileNotFoundError(f"{libname} not found in the RPATH of {bin}")
-
-
 def _findLibcsoundMacos() -> tuple[ct.CDLL, str, str] | None:
     def step1():
         try:
@@ -248,6 +246,9 @@ def csoundDLL() -> tuple[ct.CDLL, str, str]:
         raise ImportError(f"Unsupported platform: {sys.platform}")
 
     if out is None:
+        if sys.platform in ('linux', 'darwin'):
+            print("libcsound not found. It can be installed via:\n"
+                  "    curl -fsSL https://csound-plugins.github.io/installer/install.sh | bash")
         raise ImportError(f"Did not find csound library in {sys.platform}")
     dll, dllpath, opcodepath = out
     _libcsound = dll

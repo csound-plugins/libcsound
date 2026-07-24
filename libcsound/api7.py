@@ -920,6 +920,8 @@ class Csound:
         errcode is CSOUND_SUCCESS on success and CSOUND_ERROR if module
         number was not found
 
+        .. seealso:: :meth:`Csound.modules`
+
         .. rubric:: Example
 
         .. code-block:: python
@@ -951,6 +953,24 @@ class Csound:
             "audio" or "midi"
 
         .. seealso:: :py:meth:`module`
+
+        .. rubric:: Example
+
+        .. code-block:: python
+
+            >>> import libcsound
+            >>> cs = libcsound.Csound()
+            >>> cs.modules()
+            [('pa_bl', 'audio'),
+             ('pa_cb', 'audio'),
+             ('rtpw', 'audio'),
+             ('portmidi', 'midi'),
+             ('jack', 'audio'),
+             ('alsa', 'audio'),
+             ('alsaraw', 'midi'),
+             ('alsaseq', 'midi'),
+             ('devfile', 'midi')]
+
         """
         n = 0
         out = []

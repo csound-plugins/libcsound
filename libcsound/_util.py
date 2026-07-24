@@ -104,6 +104,24 @@ def defaultRealtimeModule() -> str:
 
 
 def realtimeModulesForPlatform(platform='') -> set[str]:
+    """
+    Returns a set of modules, does not check if they are actually available
+
+    To return a list of available modules, use::
+
+        >>> import libcsound
+        >>> cs = libcsound.Csound()
+        >>> cs.modules()
+        [('pa_bl', 'audio'),
+         ('pa_cb', 'audio'),
+         ('rtpw', 'audio'),
+         ('portmidi', 'midi'),
+         ('jack', 'audio'),
+         ('alsa', 'audio'),
+         ('alsaraw', 'midi'),
+         ('alsaseq', 'midi'),
+         ('devfile', 'midi')]
+    """
     if not platform:
         platform = sys.platform
     if platform == 'linux':
