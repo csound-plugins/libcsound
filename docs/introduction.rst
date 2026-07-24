@@ -120,17 +120,6 @@ The same code can be run offline (non-realtime mode)
 Installation
 ------------
 
-.. rubric:: 1. Install csound (if not installed already)
-
-For macos and windows, the recomended way to install csound is via
-the installers provided by csound itself (https://csound.com/download.html).
-In linux the recommended way is to install csound via the package manager
-(``sudo apt install csound`` for debian based distributions). In all
-these cases, at the moment, this will install csound 6. Installing csound 7
-is out of the scope of this introduction
-
-.. rubric:: 2. Install libcsound
-
 .. code-block:: shell
 
     pip install libcsound
@@ -147,7 +136,11 @@ have been removed. : these are marked clearly in the documentation. Their
 corresponding method has been kept in the csound 6 API with the indication that it needs to be
 replaced with a compatible alternative in order to write future-proof code.
 
-When this package is imported, the installed csound is queried and based on
+.. note:: 
+	Even if csound 7 has not been officially released, it is the best supported version
+	and should be preferred over csound 6.
+
+When ``libcsound`` is imported, the installed csound is queried and based on
 its version the corresponding API is loaded. So whereas the different versions supported
 might differ, for the user there are very little changes. For completeness, however,
 each version has its own documentation, making it clear which methods have changed

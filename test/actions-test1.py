@@ -14,6 +14,8 @@ parser.add_argument('-o', '--outfile', default='actionstest.wav')
 parser.add_argument('-d', '--dur', default=6, type=int)
 args = parser.parse_args()
 
+libcsound.csoundInitialize(signalHandler=False)
+
 cs = libcsound.Csound()
 print(f"Csound version: {cs.version()}")
 
@@ -39,9 +41,6 @@ nchnls = 2
 instr 1
   kchan init -1
   kchan = (kchan + metro:k(2)) % nchnls
-  if changed:k(kchan) == 1 then
-    println "Channel: %d", kchan + 1
-  endif
   asig = pinker() * 0.2
   outch kchan + 1, asig
 endin
@@ -53,7 +52,10 @@ cs.start()
 cs.scoreEvent('i', [1, 0, args.dur])
 cs.scoreEvent('e', [0, args.dur+0.01])
 
+counter = 0
 while cs.performKsmps() == libcsound.CSOUND_SUCCESS:
-    print(".", end='')
-    pass
+    counter += 1
+    if counter % 10 == 0:
+        print(".", end='', flush=True)
+        
 print("\nFinished...")

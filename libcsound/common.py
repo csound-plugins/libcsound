@@ -88,6 +88,7 @@ class OpcodeDef:
     outtypes: str
     intypes: str
     flags: int
+    size: int = 0
 
 
 @dataclass

@@ -48,7 +48,7 @@ if not common.BUILDING_DOCS:
     np.finfo(np.dtype("float64"))
 
     from . import _dll
-    libcsound, libcsoundPath = _dll.csoundDLL()
+    libcsound, libcsoundPath, opcodeDir = _dll.csoundDLL()
     VERSION = libcsound.csoundGetVersion()
     if VERSION >= 7000:
         APIVERSION = VERSION
@@ -64,6 +64,7 @@ else:
     VERSION = 0
     from . import api7
     from . import api6
+
 
 
 #Instantiation
@@ -95,33 +96,3 @@ def csoundInitialize(signalHandler=True, atExitHandler=True) -> int:
     if not atExitHandler:
         flags |= common.CSOUNDINIT_NO_ATEXIT
     return libcsound.csoundInitialize(flags)
-
-
-def setOpcodedir(path: str) -> None:
-    """
-    Overrides the folder used to locate plugins
-
-    Args:
-        path: folder where to search for plugins.
-    """
-    libcsound.csoundSetOpcodedir(common.cstring(path))
-
-
-def setDefaultMessageCallback(function):
-    """
-    Not fully implemented but useful for disabling messaging
-
-    Args:
-        function: function of the form ``(csound, attr, flags, *args) -> None``,
-            will be called each time csound would print any message to the
-            console.
-
-    .. code-block:: python
-
-        def noMessage(csound, attr, flags, *args):
-            pass
-
-        ctcsound.setDefaultMessageCallback(noMessage)
-
-    """
-    libcsound.csoundSetDefaultMessageCallback(common.DEFMSGFUNC(function))

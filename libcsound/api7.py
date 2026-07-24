@@ -539,7 +539,7 @@ def _declareAPI(libcsound, libcspt):
 
 
 if not BUILDING_DOCS:
-    libcsound, libcsoundpath = _dll.csoundDLL()
+    libcsound, libcsoundpath, opcodedir = _dll.csoundDLL()
     libcspt = libcsound
     _declareAPI(libcsound, libcspt)
 
@@ -560,12 +560,16 @@ class Csound:
     Args:
         hostData: any data, will be accessible within certain callbacks
         opcodeDir: the folder where to load opcodes from. If not given,
-            default folders are used
+            default folders are used. This corresponds to OPCODE7DIR64
         pointer: if given, the result of calling libcsound.csoundCreate(...),
             uses the given csound process instead of creating a new one
 
     Attributes:
         cs: a pointer to a csound process
+
+    User plugins are loaded from the env. variable CS_USER_PLUGINDIR if set,
+    otherwise the default path for user external plugins is used. This can
+    only be configured via the given env. variable at the moment.
 
     """
     def __init__(self,
@@ -588,6 +592,8 @@ class Csound:
             self.cs: CSOUND_p = libcsound.csoundCreate(ct.py_object(hostData), opcdir)
             self._fromPointer = False
 
+        self.opcodeDir = opcodeDir
+
         self._callbacks: dict[str, ct._FuncPointer] = {}
         """Holds any callback set"""
 
@@ -596,23 +602,24 @@ class Csound:
 
         self._compilationStarted = False
 
+        self._ugenFactory: UgenFactory | None = None
+
         self._started = False
 
     def destroy(self):
         if self._perfthread:
             self._perfthread = None  # This should destroy the performance thread
+
+        if self._ugenFactory:
+            self._ugenFactory = None
+
         if self.cs is not None:
             libcsound.csoundDestroy(self.cs)
             self.cs = None  # type: ignore
 
     def __del__(self):
         """Destroys an instance of Csound."""
-        if self._perfthread:
-            self._perfthread = None  # This should destroy the performance thread
-
-        if not self._fromPointer and self.cs is not None:
-            libcsound.csoundDestroy(self.cs)
-            self.cs = None  # type: ignore
+        self.destroy()
 
     def csound(self) -> CSOUND_p:
         """
@@ -656,7 +663,19 @@ class Csound:
         """
         if self._perfthread is None:
             self._perfthread = PerformanceThread(self)
+        assert self._perfthread is not None
         return self._perfthread
+
+    def ugenFactory(self, force=False) -> UgenFactory:
+        """
+        Create a UgenFactory for this Csound instance
+
+        """
+        if self._ugenFactory is None or force:
+            factory = UgenFactory(self)
+            self._ugenFactory = factory
+        assert self._ugenFactory is not None
+        return self._ugenFactory
 
     #
     # Attributes
@@ -852,6 +871,7 @@ class Csound:
         """
         if params is None:
             params = CsoundParams()
+
         libcsound.csoundGetParams(self.cs, ct.byref(params))
         return params
 
@@ -2671,7 +2691,7 @@ class Csound:
             flags: flags passed, normally 0
             outtypes: a string defining the output types of the opcode
             intypes: string defining input types
-            initfunc: func called at init, with the form (CSOUND *, void *),
+            initfunc: func called at init, with the form ``(CSOUND *, void *)``,
                 where the second pointer is a pointer to a struct used for the opcode
             perffunc: func called at perf time, with the same form as the initfunc
             deinitfunc: func called at deinit, same form as initfunc
@@ -2843,7 +2863,28 @@ class Csound:
         libcsound.csoundSetOpenFileCallback(self.cs, f)
 
     def getOpcodes(self) -> list[OpcodeDef]:
-        return _getOpcodes()
+        """
+        Returns a list of OpcodeDef, where each item represents an distinct opcode
+
+        Multiple opcodes with the same name can exist if they have distinct signatures
+
+        Returns:
+            a list of :class:`OpcodeDef` (a dataclass with fields 'name',
+            'outtypes', 'intypes', 'flags', and 'size')
+        """
+        factory = self.ugenFactory()
+        """
+        result.append({
+                'opname': pstring(entry.opname) if entry.opname else '',
+                'outypes': pstring(entry.outypes) if entry.outypes else '',
+                'intypes': pstring(entry.intypes) if entry.intypes else '',
+                'dsblksiz': entry.dsblksiz,
+                'flags': entry.flags,
+            })
+        """
+        opcodes = [OpcodeDef(name=opc['opname'], outtypes=opc['outypes'], intypes=opc['intypes'], flags=opc['flags'], size=opc['dsblksiz'])
+                   for opc in factory.listOpcodes()]
+        return opcodes
 
     def setOutput(self, name: str, filetype='', format='') -> None:
         """
@@ -3401,7 +3442,7 @@ class UgenFactory:
             cstring(opcodeName), cstring(outTypes), cstring(inTypes))
         return Ugen(ptr, self) if ptr else None
 
-    def listOpcodes(self):
+    def listOpcodes(self) -> list[dict]:
         """Return a list of available opcodes as dicts.
 
         Each dict has keys: opname, outypes, intypes, dsblksiz, flags.
@@ -3837,7 +3878,7 @@ def getSystemSr(module: str = '', opcodeDir='') -> tuple[float, str]:
     return sr, module
 
 
-def _getOpcodes(opcodeDir='') -> list[OpcodeDef]:
+def getOpcodes(opcodeDir='') -> list[OpcodeDef]:
     cs = Csound(opcodeDir=opcodeDir)
     cs.createMessageBuffer(echo=False)
     cs.setOption('-z1')
@@ -3864,3 +3905,34 @@ def _getOpcodes(opcodeDir='') -> list[OpcodeDef]:
             opcodes.append(OpcodeDef(name=_(name), outtypes=_(outsig), intypes=_(insig), flags=0))
             parts.clear()
     return opcodes
+
+
+#Instantiation
+def csoundInitialize(signalHandler=True, atExitHandler=True) -> int:
+    """
+    Initializes Csound library with specific flags.
+
+    There is generally no need to use it explicitly unless you need to
+    avoid default initialization that sets signal handlers and atexit()
+    callbacks.
+
+    Within a python context, it is often necessary to call this function
+    with `signalHandler=False` in order for csound not to obstruct
+    python's own SIGINT (Keyboard Interrupt) handler. If called explicitely,
+    it needs to be called prior to any other function within the API.
+
+    Args:
+        signalHandler: if True, add a signal handler
+        atExitHandler: if True, adds a callback to destroy all instances of csound
+            when exiting
+
+    Returns:
+        zero on success, positive if initialization was done already, and negative on error.
+
+    """
+    flags = 0
+    if not signalHandler:
+        flags |= CSOUNDINIT_NO_SIGNAL_HANDLER
+    if not atExitHandler:
+        flags |= CSOUNDINIT_NO_ATEXIT
+    return libcsound.csoundInitialize(flags)
