@@ -183,6 +183,17 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str, str] | None:
     return None
 
 
+def _findLibcsoundWindows() -> tuple[ct.CDLL, str, str] | None:
+    libnames = ['csound64', 'csound']
+    for libname in libnames:
+        try:
+            dll = ct.CDLL(libname)
+            return dll, libname, ''
+        except OSError:
+            continue
+    return None
+
+
 def csoundDLL() -> tuple[ct.CDLL, str, str]:
     """
     Finds and initialized libcsound
@@ -224,38 +235,23 @@ def csoundDLL() -> tuple[ct.CDLL, str, str]:
 
     if sys.platform == 'linux':
         out = _findLibcsoundLinux()
-        if out is None:
-            raise ImportError("Did not find csound library in linux")
-        dll, dllpath, opcodepath = out
-        _libcsound = dll
-        _libcsoundpath = dllpath
-        _opcodeDir = opcodepath
-        return _libcsound, _libcsoundpath, _opcodeDir
     elif sys.platform == 'darwin':
         out = _findLibcsoundMacos()
+    elif sys.platform.startswith('win'):
+        out = _findLibcsoundWindows()
         if out is None:
-            raise ImportError("Did not find csound library in macOS")
-        dll, dllpath, opcodepath = out
-        _libcsound = dll
-        _libcsoundpath = dllpath
-        _opcodeDir = opcodepath
-        return _libcsound, _libcsoundpath, _opcodeDir
-    else:
-        libnames = csoundLibraryNames()
-        for libname in libnames:
-            path = ctypes.util.find_library(libname)
-            if not path:
-                continue
-            try:
-                _libcsound = ct.CDLL(path)
-                _libcsoundpath = path
-                return _libcsound, _libcsoundpath, ''
-            except OSError as e:
-                raise OSError(f"Could not load dll from {path}: {e}") from e
+            raise ImportError("Csound library not found. "
+                              "Make sure that csound is installed and the directory containing "
+                              f"csound64.dll or csound.dll is in the path. PATH='{os.environ.get('PATH')}'")
 
-        if sys.platform.startswith('win'):
-            PATH = os.environ.get('PATH')
-            raise ImportError(f"Csound library not found (searched for '{libnames}'. "
-                            f"Make sure that csound is installed and the directory containing "
-                            f"csound64.dll or csound.dll is in the path. PATH='{PATH}'")
-        raise ImportError(f"Csound library not found (searched for '{libnames}') - Make sure that csound is installed")
+    else:
+        raise ImportError(f"Unsupported platform: {sys.platform}")
+
+    if out is None:
+        raise ImportError(f"Did not find csound library in {sys.platform}")
+    dll, dllpath, opcodepath = out
+    _libcsound = dll
+    _libcsoundpath = dllpath
+    _opcodeDir = opcodepath
+    return _libcsound, _libcsoundpath, _opcodeDir
+
