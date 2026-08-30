@@ -182,13 +182,25 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str, str] | None:
 
 
 def _findLibcsoundWindows() -> tuple[ct.CDLL, str, str] | None:
-    libnames = ['csound64', 'csound']
-    for libname in libnames:
-        try:
-            dll = ct.CDLL(libname)
-            return dll, libname, ''
-        except OSError:
-            continue
+    # first search the PATH
+    try:
+        dll = ct.CDLL("csound64", winmode=0)   # <-- allow to search the path
+        return dll, "csound64", ''
+    except OSError:
+        pass
+
+    possible_paths = [
+        r"C:\Program Files\csound",
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            dllabspath = os.path.join(path, "csound64.dll")
+            if os.path.exists(dllabspath):
+                try:
+                    dll = ct.CDLL(dllabspath)
+                    return dll, dllabspath, ''
+                except OSError:
+                    continue
     return None
 
 
