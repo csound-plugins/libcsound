@@ -171,7 +171,10 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str, str] | None:
     return None
 
 
-def findLibWindows(libname: str, possible_paths: Sequence[str] = ()) -> tuple[ct.CDLL | None, str]:
+def findLibWindows(libname: str,
+                   possible_paths: Sequence[str] = (r"C:\Program Files\csound",
+                                                    r"C:\Program Files\csound\bin")
+                   ) -> tuple[ct.CDLL | None, str]:
     # first search the PATH
     try:
         dll = ct.CDLL(libname, winmode=0)   # <-- allow to search the path
@@ -182,7 +185,7 @@ def findLibWindows(libname: str, possible_paths: Sequence[str] = ()) -> tuple[ct
     if possible_paths:
         for path in possible_paths:
             if os.path.exists(path):
-                dllabspath = os.path.join(path, "csound64.dll")
+                dllabspath = os.path.join(path, libname)
                 if os.path.exists(dllabspath):
                     try:
                         dll = ct.CDLL(dllabspath)
@@ -193,12 +196,8 @@ def findLibWindows(libname: str, possible_paths: Sequence[str] = ()) -> tuple[ct
 
 
 def _findLibcsoundWindows() -> tuple[ct.CDLL, str, str] | None:
-    possible_paths = (r"C:\Program Files\csound",)
-
-    cdll, libpath = findLibWindows('csound64', possible_paths)
-    if cdll is not None:
-        return cdll, libpath, ''
-    return None
+    cdll, libpath = findLibWindows('csound64.dll')
+    return (cdll, libpath, '') if cdll is not None else None
 
 
 def csoundDLL() -> tuple[ct.CDLL, str, str]:
