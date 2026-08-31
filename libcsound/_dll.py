@@ -4,24 +4,12 @@ import ctypes.util
 import sys
 import os
 from .common import BUILDING_DOCS
-
-
-def csoundLibraryNames() -> list[str]:
-    platform = sys.platform
-    if platform.startswith('linux'):
-        return ['csound64']
-    elif platform.startswith('win'):
-        return ['csound64', 'csound']
-    elif platform.startswith('darwin'):
-        return ['CsoundLib64']
-    else:
-        raise RuntimeError(f"Platform '{platform}' not supported")
+from typing import Sequence
 
 
 _libcsound = None
 _libcsoundpath = ''
 _opcodeDir = ''
-
 
 
 def read_rpath(bin: str, libname: str) -> str:
@@ -119,6 +107,8 @@ def read_rpath_macos(bin: str, libname: str) -> str:
             return os.path.realpath(candidate)
 
     raise FileNotFoundError(f"{libname} not found in the RPATH of {bin}")
+
+
 def _findLibcsoundMacos() -> tuple[ct.CDLL, str, str] | None:
     def step1():
         try:
@@ -181,26 +171,33 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str, str] | None:
     return None
 
 
-def _findLibcsoundWindows() -> tuple[ct.CDLL, str, str] | None:
+def findLibWindows(libname: str, possible_paths: Sequence[str] = ()) -> tuple[ct.CDLL | None, str]:
     # first search the PATH
     try:
-        dll = ct.CDLL("csound64", winmode=0)   # <-- allow to search the path
-        return dll, "csound64", ''
+        dll = ct.CDLL(libname, winmode=0)   # <-- allow to search the path
+        return dll, libname
     except OSError:
         pass
 
-    possible_paths = [
-        r"C:\Program Files\csound",
-    ]
-    for path in possible_paths:
-        if os.path.exists(path):
-            dllabspath = os.path.join(path, "csound64.dll")
-            if os.path.exists(dllabspath):
-                try:
-                    dll = ct.CDLL(dllabspath)
-                    return dll, dllabspath, ''
-                except OSError:
-                    continue
+    if possible_paths:
+        for path in possible_paths:
+            if os.path.exists(path):
+                dllabspath = os.path.join(path, "csound64.dll")
+                if os.path.exists(dllabspath):
+                    try:
+                        dll = ct.CDLL(dllabspath)
+                        return dll, dllabspath
+                    except OSError:
+                        continue
+    return None, ''
+
+
+def _findLibcsoundWindows() -> tuple[ct.CDLL, str, str] | None:
+    possible_paths = (r"C:\Program Files\csound",)
+
+    cdll, libpath = findLibWindows('csound64', possible_paths)
+    if cdll is not None:
+        return cdll, libpath, ''
     return None
 
 

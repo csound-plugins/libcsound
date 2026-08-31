@@ -447,11 +447,15 @@ if not BUILDING_DOCS:
     if sys.platform.startswith('linux'):
         libcspt = ct.CDLL("libcsnd6.so")
     elif sys.platform.startswith('win'):
-        libcspt = ct.CDLL(ctypes.util.find_library("csnd6"))
+        libcspt, _ = _dll.findLibWindows("csnd6.dll")
     elif sys.platform.startswith('darwin'):
-        libcspt = ct.CDLL(ctypes.util.find_library('csnd6.6.0'))
+        dllpath = ctypes.util.find_library('csnd6.6.0')
+        libcspt = ct.CDLL(dllpath) if dllpath else None
     else:
         raise ImportError(f"Platform '{sys.platform}' unknown")
+
+    if libcspt is None:
+        raise OSError("Could not find csnd6 library")
 
     _declareAPI(libcsound, libcspt)
 
