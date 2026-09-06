@@ -127,13 +127,17 @@ Installation
 Csound
 ^^^^^^
 
+`libcsound` does not install csound itself. To install csound, see:
+
 See https://github.com/csound/csound/releases
 
 **Linux / macOS**
+
+For linux csound 7 can be installed via:
+
   .. code::
 
-    curl -fsSL https://csound-plugins.github.io/installer/install.sh | bash
-
+    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash
 
 
 -------------------------

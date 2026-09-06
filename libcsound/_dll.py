@@ -256,7 +256,7 @@ def csoundDLL() -> tuple[ct.CDLL, str, str]:
     if out is None:
         if sys.platform in ('linux', 'darwin'):
             print("libcsound not found. It can be installed via:\n"
-                  "    curl -fsSL https://csound-plugins.github.io/installer/install.sh | bash")
+                  "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
         raise ImportError(f"Did not find csound library in {sys.platform}")
     dll, dllpath, opcodepath = out
     _libcsound = dll
