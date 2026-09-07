@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import numpy as np
 import warnings
 import ctypes as ct
@@ -3838,6 +3837,38 @@ class UgenVar:
         """Get the string value (S-type vars only)."""
         s = libcsound.csoundUgenVarGetString(self.var)
         return pstring(s) if s else None
+
+
+def getAudioDevices(module='', opcodeDir='') -> tuple[list[AudioDevice], list[AudioDevice]]:
+    """
+    Get the available audio input and output devices.
+
+    Args:
+        module: the audio module to use, or a default for each platform
+        opcodeDir: the directory to search for opcodes (overrides OPCODE7DIR64 env var)
+
+    Returns:
+        a tuple (indevs, outdevs), where indevs is a list of input AudioDevice objects
+        and outdevs is a list of output AudioDevice objects
+    """
+    if not module:
+        module = _util.defaultRealtimeModule()
+    else:
+        modules = _util.realtimeModulesForPlatform()
+        if module not in modules:
+            raise ValueError(f"Module {module} not known for this platform")
+    csound = Csound(opcodeDir=opcodeDir)
+    csound.createMessageBuffer(echo=False)
+    csound.setOption('-m0')
+    csound.setOption('--suppress-version')
+    csound.setOption(f'-+rtaudio={module}')
+    csound.start()
+    outdevs = csound.audioDevList(isOutput=True)
+    indevs = csound.audioDevList(isOutput=False)
+    csound.stop()
+    csound.destroyMessageBuffer()
+
+    return indevs, outdevs
 
 
 def getSystemSr(module: str = '', opcodeDir='') -> tuple[float, str]:

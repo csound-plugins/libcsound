@@ -2,8 +2,9 @@ from __future__ import annotations
 import ctypes as ct
 import ctypes.util
 import sys
+import hashlib
 import os
-from .common import BUILDING_DOCS
+from .common import BUILDING_DOCS, logger
 from typing import Sequence
 
 
@@ -149,8 +150,12 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str, str] | None:
             return None
 
     def step2():
-        if libname := ctypes.util.find_library("csound64"):
-            return ct.CDLL(libname), libname, ''
+        if (libname := ctypes.util.find_library("csound64")):
+            if os.path.exists(libname):
+                return ct.CDLL(libname), libname, ''
+            else:
+                logger.error(f"find_library returned '{libname}', but the file does not exist, "
+                             f"probably ldconfig needs to be called to update the ")
         return None
 
     def step3():
@@ -200,7 +205,7 @@ def _findLibcsoundWindows() -> tuple[ct.CDLL, str, str] | None:
     return (cdll, libpath, '') if cdll is not None else None
 
 
-def csoundDLL() -> tuple[ct.CDLL, str, str]:
+def csoundDLL(install=True) -> tuple[ct.CDLL, str, str]:
     """
     Finds and initialized libcsound
 
@@ -245,22 +250,174 @@ def csoundDLL() -> tuple[ct.CDLL, str, str]:
         out = _findLibcsoundMacos()
     elif sys.platform.startswith('win'):
         out = _findLibcsoundWindows()
-        if out is None:
-            raise ImportError("Csound library not found. "
-                              "Make sure that csound is installed and the directory containing "
-                              f"csound64.dll or csound.dll is in the path. PATH='{os.environ.get('PATH')}'")
-
     else:
         raise ImportError(f"Unsupported platform: {sys.platform}")
 
-    if out is None:
-        if sys.platform in ('linux', 'darwin'):
-            print("libcsound not found. It can be installed via:\n"
-                  "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
-        raise ImportError(f"Did not find csound library in {sys.platform}")
-    dll, dllpath, opcodepath = out
-    _libcsound = dll
-    _libcsoundpath = dllpath
-    _opcodeDir = opcodepath
-    return _libcsound, _libcsoundpath, _opcodeDir
+    if out is not None:
+        dll, dllpath, opcodepath = out
+        _libcsound = dll
+        _libcsoundpath = dllpath
+        _opcodeDir = opcodepath
+        return _libcsound, _libcsoundpath, _opcodeDir
 
+    if install:
+        if sys.platform == 'linux':
+            _install_csound_linux()
+            return csoundDLL(install=False)
+
+    if sys.platform in ('linux', 'darwin'):
+        raise ImportError("libcsound not found. It can be installed via:\n"
+                          "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
+    elif sys.platform.startswith('win'):
+        raise ImportError("Csound library not found. "
+                          "Make sure that csound is installed and the directory containing "
+                          f"csound64.dll is in the path. PATH='{os.environ.get('PATH')}'")
+    else:
+        raise ImportError(f"Did not find csound library in {sys.platform}")
+
+
+def _hexdigest(path: str) -> str:
+    hashsum = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            hashsum.update(chunk)
+    return hashsum.hexdigest()
+
+
+def _install_csound_linux() -> None:
+    """Install the latest csound 7 portable release for linux.
+
+    This mirrors the bootstrapping process of the one-line installer at
+    https://csound-plugins.github.io/getcsound.sh
+
+    It downloads the release asset ``csound7-linux-<arch>.zip`` from the
+    ``csound-plugins/csound-plugins`` GitHub repository, verifies the
+    SHA-256 checksum, extracts it and runs the
+    bundled ``install.sh``. When running inside a tty the installer is run
+    interactively; otherwise it is run with ``--user -y`` so that csound is
+    installed to ``~/.local/csound``
+
+    After a successful installation, the environment variables ``LIBCSOUNDPATH``
+    and ``OPCODE7DIR64`` are set to point to the installed library and plugin
+    directory, so that the current process can find csound immediately without
+    the need to open a new terminal.
+
+    Returns:
+        True if the installation was successful.
+
+    Raises:
+        RuntimeError: if the download or the checksum verification failed, if the
+            bundled ``install.sh`` could not be found or failed, or if no csound
+            installation could be located after running the installer.
+    """
+    import hashlib
+    import platform
+    import shutil
+    import stat
+    import subprocess
+    import tempfile
+    import urllib.error
+    import urllib.request
+    import zipfile
+    from pathlib import Path
+
+    repo = "csound-plugins/csound-plugins"
+    tag = os.getenv("CSOUND7_TAG", "latest")
+
+    # Detect the CPU architecture
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        arch = "x86_64"
+    elif machine in ("aarch64", "arm64"):
+        arch = "aarch64"
+    else:
+        raise RuntimeError(f"Unsupported architecture: {machine}. "
+                           "Supported architectures: x86_64, aarch64.")
+
+    asset = os.getenv("CSOUND7_ASSET", f"csound7-linux-{arch}.zip")
+    checksum_asset = f"{asset}.sha256"
+    base_url = f"https://github.com/{repo}/releases/download/{tag}"
+    download_url = f"{base_url}/{asset}"
+    checksum_url = f"{base_url}/{checksum_asset}"
+
+    def download(url: str, target: str, verbose=False) -> None:
+        if verbose:
+            print("Downloading URL:", url, "to", target)
+        else:
+            logger.info("Downloading URL: %s to %s...", url, os.path.basename(target))
+        req = urllib.request.Request(url, headers={"User-Agent": "libcsound"})
+        with urllib.request.urlopen(req, timeout=120) as resp, \
+                open(target, "wb") as out:
+            shutil.copyfileobj(resp, out)
+
+    with tempfile.TemporaryDirectory(prefix="libcsound-install-") as tmpdir:
+        zip_path = os.path.join(tmpdir, asset)
+        checksum_path = f"{zip_path}.sha256"
+
+        # Download the archive and its checksum file
+        try:
+            download(download_url, zip_path, verbose=True)
+            download(checksum_url, checksum_path)
+        except (urllib.error.URLError, OSError) as e:
+            raise RuntimeError(f"Failed to download {asset} from {download_url}\n{e}") from e
+
+        # Verify the SHA-256 checksum before extracting
+        with open(checksum_path) as f:
+            tokens = f.readline().split()
+        expected = tokens[0] if tokens else ""
+        actual = _hexdigest(zip_path)
+        if not expected or expected != actual:
+            raise RuntimeError(
+                f"SHA-256 checksum verification failed for {asset}\n"
+                f"Expected: {expected}\n"
+                f"Actual:   {actual}\n"
+                f"The downloaded file may be corrupted or have been modified.\n"
+                f"Checksum URL: {checksum_url}")
+        logger.info("Checksum verified.")
+
+        # Extract the archive
+        extract_dir = os.path.join(tmpdir, "extracted")
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(extract_dir)
+
+        # Locate the bundled installer
+        installer = None
+        for root, _dirs, files in os.walk(extract_dir):
+            if "install.sh" in files:
+                installer = os.path.join(root, "install.sh")
+                break
+        if installer is None:
+            raise RuntimeError(f"install.sh was not found inside {asset}")
+
+        os.chmod(installer,
+                 os.stat(installer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+        # Run the bundled installer
+        if sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty():
+            # running inside a terminal: run interactively
+            logger.info("Running bundled installer: %s", installer)
+            result = subprocess.run([installer])
+        else:
+            # no terminal: install for the current user, answering yes to all
+            # questions so that the installer does not block on any prompt
+            logger.info("Running bundled installer: %s --user -y", installer)
+            result = subprocess.run([installer, "--user", "-y"])
+
+        if result.returncode != 0:
+            raise RuntimeError(f"The bundled installer exited with status {result.returncode}")
+
+    # Make the freshly installed csound available to the current process
+    home = Path.home()
+    userpath = home/".local/csound/libcsound64.so"
+    systempath = Path("/usr/local/lib/libcsound64.so")
+    if userpath.exists():
+        os.environ["LIBCSOUNDPATH"] = str(userpath.resolve())
+        pluginspath = home/".local/lib/csound/7.0/plugins64"
+        assert pluginspath.exists() and pluginspath.is_dir()
+        os.environ['OPCODE7DIR64'] = str(pluginspath.resolve())
+    elif systempath.exists():
+        pluginspath = Path("/usr/local/lib/csound/plugins64-7.0")
+        assert pluginspath.exists() and pluginspath.is_dir()
+    else:
+        raise RuntimeError("csound 7 installation failed: "
+                           "libcsound64.so was not found in any of the standard locations")
