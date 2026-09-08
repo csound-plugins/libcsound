@@ -154,6 +154,38 @@ jobs:
           name: artifact-${{matrix.csound-branch }}-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index}}
           path: test/*.flac
 
+  linux-autoinstall:
+    # Tests the automatic csound installation triggered on import when csound is
+    # not present: _install_csound_linux downloads the latest csound 7 portable
+    # release from the csound-plugins/csound-plugins repository. Since CI has no
+    # terminal, the bundled installer runs non-interactively with "--user -y".
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install from repo
+        run: |
+          pip install .
+
+      - name: import libcsound (auto-installs csound) and render offline
+        working-directory: test
+        run: |
+          python linux-install-render.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-install-render-${{ matrix.python-version }}
+          path: test/out.wav
+
   macos-autoinstall:
     # Tests the automatic csound installation triggered on import when csound is
     # not present: the bundled getcsound.sh resolves the latest csound 7 macOS

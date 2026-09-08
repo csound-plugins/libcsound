@@ -274,7 +274,8 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str, str]:
     elif sys.platform.startswith('win'):
         raise ImportError("Csound library not found. "
                           "Make sure that csound is installed and the directory containing "
-                          f"csound64.dll is in the path. PATH='{os.environ.get('PATH')}'")
+                          f"csound64.dll is in the path. PATH='{os.environ.get('PATH')}'\n"
+                          "csound can be installed from https://github.com/csound/csound/releases")
     else:
         raise ImportError(f"Did not find csound library in {sys.platform}")
 
