@@ -84,6 +84,8 @@ endin
     while cs.performKsmps() == libcsound.CSOUND_SUCCESS:
         pass
 
+    cs.stop()
+
     if not os.path.exists(OUTFILE):
         print(f"FAILED: no output file {OUTFILE} was written", file=sys.stderr)
         sys.exit(2)
