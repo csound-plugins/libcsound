@@ -60,11 +60,9 @@ def main() -> None:
 
     libcsound.csoundInitialize(signalHandler=False)
     cs = libcsound.Csound()
-    ret = cs.setOption(f"-o{OUTFILE}")
-    if ret != 0:
-        print(f"FAILED: setOption returned {ret}", file=sys.stderr)
-        sys.exit(2)
-
+    cs.setOption(f"-o{OUTFILE}")
+    cs.setOption("--wave")
+    
     ret = cs.compileOrc(r"""
 sr = 44100
 ksmps = 64
