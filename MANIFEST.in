@@ -3,4 +3,5 @@ exclude pyrightconfig.json
 exclude examples
 exclude .gitignore
 prune examples
+include libcsound/data/getcsound.sh
 

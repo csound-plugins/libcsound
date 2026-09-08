@@ -264,6 +264,9 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str, str]:
         if sys.platform == 'linux':
             _install_csound_linux()
             return csoundDLL(install=False)
+        elif sys.platform == 'darwin':
+            _install_csound_macos()
+            return csoundDLL(install=False)
 
     if sys.platform in ('linux', 'darwin'):
         raise ImportError("libcsound not found. It can be installed via:\n"
@@ -282,6 +285,23 @@ def _hexdigest(path: str) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             hashsum.update(chunk)
     return hashsum.hexdigest()
+
+
+def _download(url: str, target: str, verbose=False) -> None:
+    import urllib.request
+    import urllib.error
+    import shutil
+    if verbose:
+        print("Downloading URL:", url, "to", target)
+    else:
+        logger.info("Downloading URL: %s to %s...", url, os.path.basename(target))
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "libcsound"})
+        with urllib.request.urlopen(req, timeout=120) as resp, \
+                open(target, "wb") as out:
+            shutil.copyfileobj(resp, out)
+    except (urllib.error.URLError, OSError) as e:
+        raise RuntimeError(f"Failed to download {target} from {url}\n{e}") from e
 
 
 def _install_csound_linux() -> None:
@@ -310,14 +330,10 @@ def _install_csound_linux() -> None:
             bundled ``install.sh`` could not be found or failed, or if no csound
             installation could be located after running the installer.
     """
-    import hashlib
     import platform
-    import shutil
     import stat
     import subprocess
     import tempfile
-    import urllib.error
-    import urllib.request
     import zipfile
     from pathlib import Path
 
@@ -337,31 +353,15 @@ def _install_csound_linux() -> None:
     asset = os.getenv("CSOUND7_ASSET", f"csound7-linux-{arch}.zip")
     checksum_asset = f"{asset}.sha256"
     base_url = f"https://github.com/{repo}/releases/download/{tag}"
-    download_url = f"{base_url}/{asset}"
     checksum_url = f"{base_url}/{checksum_asset}"
-
-    def download(url: str, target: str, verbose=False) -> None:
-        if verbose:
-            print("Downloading URL:", url, "to", target)
-        else:
-            logger.info("Downloading URL: %s to %s...", url, os.path.basename(target))
-        req = urllib.request.Request(url, headers={"User-Agent": "libcsound"})
-        with urllib.request.urlopen(req, timeout=120) as resp, \
-                open(target, "wb") as out:
-            shutil.copyfileobj(resp, out)
 
     with tempfile.TemporaryDirectory(prefix="libcsound-install-") as tmpdir:
         zip_path = os.path.join(tmpdir, asset)
         checksum_path = f"{zip_path}.sha256"
+        _download(f"{base_url}/{asset}", zip_path, verbose=True)
+        _download(checksum_url, checksum_path)
 
-        # Download the archive and its checksum file
-        try:
-            download(download_url, zip_path, verbose=True)
-            download(checksum_url, checksum_path)
-        except (urllib.error.URLError, OSError) as e:
-            raise RuntimeError(f"Failed to download {asset} from {download_url}\n{e}") from e
-
-        # Verify the SHA-256 checksum before extracting
+        # Verify SHA256 checksum before extracting
         with open(checksum_path) as f:
             tokens = f.readline().split()
         expected = tokens[0] if tokens else ""
@@ -375,22 +375,19 @@ def _install_csound_linux() -> None:
                 f"Checksum URL: {checksum_url}")
         logger.info("Checksum verified.")
 
-        # Extract the archive
         extract_dir = os.path.join(tmpdir, "extracted")
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(extract_dir)
 
         # Locate the bundled installer
-        installer = None
         for root, _dirs, files in os.walk(extract_dir):
             if "install.sh" in files:
                 installer = os.path.join(root, "install.sh")
                 break
-        if installer is None:
+        else:
             raise RuntimeError(f"install.sh was not found inside {asset}")
 
-        os.chmod(installer,
-                 os.stat(installer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.chmod(installer, os.stat(installer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
         # Run the bundled installer
         if sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty():
@@ -421,3 +418,62 @@ def _install_csound_linux() -> None:
     else:
         raise RuntimeError("csound 7 installation failed: "
                            "libcsound64.so was not found in any of the standard locations")
+
+
+def _install_csound_macos() -> None:
+    """Install the latest csound 7 .pkg for macOS by running the bundled installer.
+
+    The official Csound 7 macOS package is produced by the "csound_builds"
+    workflow of the csound/csound repository on the "develop" branch and is
+    installed with the system ``installer`` under sudo, so an interactive
+    terminal session is required.
+
+    This runs the bundled copy of the one-line installer used at
+    https://csound-plugins.github.io/getcsound.sh, which resolves the latest
+    successful workflow run, downloads its ``csound-7.*-macos*`` artifact
+    through the anonymous nightly.link mirror and installs the extracted .pkg.
+
+    After a successful installation the environment variables ``LIBCSOUNDPATH``
+    and ``OPCODE7DIR64`` are set to point to the installed library and plugin
+    directory, so that the current process can find csound immediately without
+    the need to open a new terminal.
+
+    Raises:
+        RuntimeError: if the bundled installer could not be found or failed, or
+            if no csound installation could be located after running it.
+    """
+    import importlib.resources
+    import subprocess
+    from pathlib import Path
+
+    installer = importlib.resources.files(__package__).joinpath("data", "getcsound.sh")
+    if not installer.is_file():
+        raise RuntimeError(f"The bundled installer was not found: {installer}")
+
+    # as_file() yields a real filesystem path, extracting to a temporary file
+    # first when the package is loaded from an archive (e.g. a zip).
+    with importlib.resources.as_file(installer) as script:
+        logger.info("Running bundled installer: %s", script)
+        result = subprocess.run(["bash", str(script)])
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"The bundled installer exited with status {result.returncode}\n"
+            "The csound macOS .pkg is installed with sudo and needs an interactive "
+            "terminal session.\n"
+            "Alternatively, csound can be installed manually:\n"
+            "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash"
+        )
+
+    # Make the freshly installed csound available to the current process
+    csound_dir = Path("/Applications/Csound")
+    libpath = csound_dir / "CsoundLib64.framework" / "CsoundLib64"
+    pluginspath = csound_dir / "CsoundLib64.framework" / "Resources" / "Opcodes64"
+    if libpath.exists():
+        os.environ["LIBCSOUNDPATH"] = str(libpath.resolve())
+        if pluginspath.exists() and pluginspath.is_dir():
+            os.environ['OPCODE7DIR64'] = str(pluginspath.resolve())
+        logger.info("Csound installed successfully to %s", csound_dir)
+        return
+
+    raise RuntimeError("csound 7 installation failed: "
+                       "CsoundLib64 was not found in /Applications/Csound")

@@ -25,6 +25,9 @@ dependencies = ["numpy>=2.1"]
 [tool.setuptools]
 packages = ['libcsound']
 
+[tool.setuptools.package-data]
+libcsound = ["data/*.sh"]
+
 # Fix for error in uv plublish
 license-files = []
 

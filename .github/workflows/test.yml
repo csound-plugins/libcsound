@@ -153,3 +153,49 @@ jobs:
         with:
           name: artifact-${{matrix.csound-branch }}-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index}}
           path: test/*.flac
+
+  macos-autoinstall:
+    # Tests the automatic csound installation triggered on import when csound is
+    # not present: the bundled getcsound.sh resolves the latest csound 7 macOS
+    # .pkg from the csound/csound "develop" builds, so that branch needs to have
+    # a recent successful build. The installer requires an interactive terminal
+    # (it installs under sudo), so the test is run under `script` which provides
+    # a pseudo-terminal.
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install from repo
+        run: |
+          pip install .
+
+      - name: import libcsound (auto-installs csound) and render offline
+        working-directory: test
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LOG="$RUNNER_TEMP/macos-install.log"
+          NORM="$RUNNER_TEMP/macos-install.norm"
+          script -q "$LOG" python3 macos-install-render.py || true
+          tr -d '\r' < "$LOG" > "$NORM" 2>/dev/null || true
+          if ! grep -qx 'OK' "$NORM"; then
+            echo "=== installer output ==="
+            tail -200 "$LOG" || true
+            exit 1
+          fi
+          echo "=== installer output ==="
+          cat "$NORM"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-install-render-${{ matrix.python-version }}
+          path: test/out.wav
