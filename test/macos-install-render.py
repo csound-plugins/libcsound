@@ -62,7 +62,7 @@ def main() -> None:
     cs = libcsound.Csound()
     cs.setOption(f"-o{OUTFILE}")
     cs.setOption("--wave")
-    
+
     ret = cs.compileOrc(r"""
 sr = 44100
 ksmps = 64
@@ -82,16 +82,18 @@ endin
     cs.scoreEvent('e', [0, 1.1])
 
     while cs.performKsmps() == libcsound.CSOUND_SUCCESS:
-        pass
+        print(".", end="", flush=True)
 
-    cs.stop()
+    # Finalize the output file: the WAV header is only written and the file
+    # closed when the csound instance is destroyed.
+    cs.destroy()
 
     if not os.path.exists(OUTFILE):
-        print(f"FAILED: no output file {OUTFILE} was written", file=sys.stderr)
+        print(f"\nFAILED: no output file {OUTFILE} was written", file=sys.stderr)
         sys.exit(2)
     with wave.open(OUTFILE, "rb") as wf:
         nframes = wf.getnframes()
-        print(f"Rendered {OUTFILE}: channels={wf.getnchannels()} "
+        print(f"\nRendered {OUTFILE}: channels={wf.getnchannels()} "
               f"samplerate={wf.getframerate()} frames={nframes}")
     if nframes == 0:
         print(f"FAILED: {OUTFILE} is empty", file=sys.stderr)
