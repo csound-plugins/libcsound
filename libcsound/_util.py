@@ -156,20 +156,21 @@ def testCsound(module: str = '',
         nchnls: number of output channels
         signal: which signal to use. Any valid sound-generating csound code
     """
-    if not module:
-        module = defaultRealtimeModule()
-
     from . import Csound
     csound = Csound(opcodeDir=opcodeDir)
-    if outdev:
-        csound.setOption(f'-o{outdev}')
-    elif module == 'jack':
-        csound.setOption('-odac:_')
-    else:
-        csound.setOption('-odac')
 
-    if module:
+    if outdev:
+        if module:
+            csound.setOption(f'-+rtaudio={module}')
+        csound.setOption(f'-o{outdev}')
+    else:
+        if not module:
+            module = defaultRealtimeModule()
         csound.setOption(f'-+rtaudio={module}')
+        if module == 'jack':
+            csound.setOption('-odac:_')
+        else:
+            csound.setOption('-odac')
 
     if sr <= 0:
         csound.setOption('--use-system-sr')

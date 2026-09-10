@@ -3929,35 +3929,6 @@ def getSystemSr(module: str = '', opcodeDir='') -> tuple[float, str]:
     return sr, module
 
 
-def getOpcodes(opcodeDir='') -> list[OpcodeDef]:
-    cs = Csound(opcodeDir=opcodeDir)
-    cs.createMessageBuffer(echo=False)
-    cs.setOption('-z1')
-    opcodes = []
-    parts = []
-    _ = _util.asciistr
-    for msg, attr in cs.iterMessages():
-        msgstripped = msg.strip()
-        if msgstripped:
-            parts.append(msgstripped)
-        if msg.endswith('\n'):
-            if not parts:
-                break
-            name = parts[0]
-            if len(parts) == 3:
-                outsig = parts[1].strip()
-                insig = parts[2].strip()
-            else:
-                continue
-            if outsig == '(null)':
-                outsig = ''
-            if insig == '(null)':
-                insig = ''
-            opcodes.append(OpcodeDef(name=_(name), outtypes=_(outsig), intypes=_(insig), flags=0))
-            parts.clear()
-    return opcodes
-
-
 #Instantiation
 def csoundInitialize(signalHandler=True, atExitHandler=True) -> int:
     """

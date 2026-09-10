@@ -6,7 +6,7 @@ import hashlib
 import os
 from .common import BUILDING_DOCS, logger
 from typing import Sequence
-
+from pathlib import Path
 
 _libcsound = None
 _libcsoundpath = ''
@@ -30,7 +30,6 @@ def read_rpath(bin: str, libname: str) -> str:
     """
     import subprocess
     import re
-    from pathlib import Path
 
     result = subprocess.run(["readelf", "-d", bin], check=True, capture_output=True, text=True)
 
@@ -75,7 +74,6 @@ def read_rpath_macos(bin: str, libname: str) -> str:
     """
     import subprocess
     import re
-    from pathlib import Path
 
     result = subprocess.run(["otool", "-l", bin], check=True, capture_output=True, text=True)
 
@@ -110,17 +108,25 @@ def read_rpath_macos(bin: str, libname: str) -> str:
     raise FileNotFoundError(f"{libname} not found in the RPATH of {bin}")
 
 
+def _tryCDLL(libpath: str, errormsg='') -> ct.CDLL | None:
+    try:
+        return ct.CDLL(libpath)
+    except OSError as e:
+        if not errormsg:
+            errormsg = f"Could not initialize library {libpath}"
+        logger.error("%s (exception: %s)", errormsg, e)
+        return None
+
 def _findLibcsoundMacos() -> tuple[ct.CDLL, str, str] | None:
     def step1():
-        try:
-            dll = ct.CDLL("CsoundLib64")
-            return dll, "CsoundLib64", ''
-        except Exception:
-            return None
+        dll = _tryCDLL("CsoundLib64")
+        return (dll, "CsoundLib64", '') if dll else None
 
     def step2():
         if libname := ctypes.util.find_library("CsoundLib64"):
-            return ct.CDLL(libname), libname, ''
+            dll = _tryCDLL(libname, f"find_library returned '{libname}', "
+                                    f"but the library could not be initialized")
+            return (dll, libname, '') if dll else None
         return None
 
     def step3():
@@ -129,8 +135,9 @@ def _findLibcsoundMacos() -> tuple[ct.CDLL, str, str] | None:
         if not csoundbin:
             return None
         libcsound_rpath = read_rpath_macos(csoundbin, "CsoundLib64")
-        dll = ct.CDLL(libcsound_rpath)
-        return dll, libcsound_rpath, ''
+        dll = _tryCDLL(libcsound_rpath, f"Found library at {libcsound_rpath}, "
+                                        f"but failed to load")
+        return (dll, libcsound_rpath, '') if dll else None
 
     for func in [step1, step2, step3]:
         out = func()
@@ -143,31 +150,41 @@ def _findLibcsoundMacos() -> tuple[ct.CDLL, str, str] | None:
 
 def _findLibcsoundLinux() -> tuple[ct.CDLL, str, str] | None:
     def step1():
-        try:
-            dll = ct.CDLL("libcsound64.so")
-            return dll, "libcsound64.so", ''
-        except Exception as e:
-            return None
+        dll = _tryCDLL("libcsound64.so")
+        return (dll, "libcsound64.so", '') if dll else None
 
     def step2():
         if (libname := ctypes.util.find_library("csound64")):
-            if os.path.exists(libname):
-                return ct.CDLL(libname), libname, ''
-            else:
-                logger.error(f"find_library returned '{libname}', but the file does not exist, "
-                             f"probably ldconfig needs to be called to update the ")
-        return None
+            # find_library does not always return an absolute path
+            # so the only check is to just try to initialize the dll
+            dll = _tryCDLL(libname, f"find_library returned '{libname}', "
+                                    f"but the library could not be initialized")
+            return (dll, libname, '') if dll else None
 
     def step3():
         import shutil
         csoundbin = shutil.which("csound")
         if not csoundbin:
             return None
-        libcsound_rpath = read_rpath(csoundbin, "libcsound64.so")
-        dll = ct.CDLL(libcsound_rpath)
-        return dll, libcsound_rpath, ''
+        try:
+            libcsound_rpath = read_rpath(csoundbin, "libcsound64.so")
+        except OSError as e:
+            logger.debug("error while checking the rpath of csound (%s), error: %s", csoundbin, e)
+            return None
 
-    for func in [step1, step2, step3]:
+        dll = _tryCDLL(libcsound_rpath, f"Found library at {libcsound_rpath}, "
+                                        f"but failed to load")
+        return (dll, libcsound_rpath, '') if dll else None
+
+    def step4():
+        HOME = Path.home()
+        for path in [HOME/".local/csound/libcsound64.so"]:
+            if path.exists():
+                pathstr = str(path.resolve())
+                dll = _tryCDLL(pathstr, f"Found library at {pathstr}, but failed to load")
+                return (dll, pathstr, '') if dll else None
+
+    for func in [step1, step2, step3, step4]:
         out = func()
         if out is not None:
             dll, dllpath, opcodepath = out
@@ -336,7 +353,6 @@ def _install_csound_linux() -> None:
     import subprocess
     import tempfile
     import zipfile
-    from pathlib import Path
 
     repo = "csound-plugins/csound-plugins"
     tag = os.getenv("CSOUND7_TAG", "latest")
@@ -445,7 +461,6 @@ def _install_csound_macos() -> None:
     """
     import importlib.resources
     import subprocess
-    from pathlib import Path
 
     installer = importlib.resources.files(__package__).joinpath("data", "getcsound.sh")
     if not installer.is_file():
