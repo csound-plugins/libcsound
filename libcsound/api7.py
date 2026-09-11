@@ -538,7 +538,7 @@ def _declareAPI(libcsound, libcspt):
 
 
 if not BUILDING_DOCS:
-    libcsound, libcsoundpath, opcodedir = _dll.csoundDLL()
+    libcsound, libcsoundpath = _dll.csoundDLL()
     libcspt = libcsound
     _declareAPI(libcsound, libcspt)
 

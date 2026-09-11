@@ -32,7 +32,19 @@ libcsound
 
 .. code::
 
-	pip install libcsound
+    pip install libcsound
+
+Environment variables
+^^^^^^^^^^^^^^^^^^^^^^
+
+The csound shared library is located and loaded when ``libcsound`` is imported,
+so these variables must be set before importing it.
+
+* ``LIBCSOUNDPATH``: absolute path to the csound shared library to load. When
+  set, no other search is performed. If unset, the library is searched in the
+  system path.
+* ``LIBCSOUND_INSTALL``: set to ``0`` or ``false`` to disable the automatic
+  installation of csound when it cannot be found.
 
 --------------------------------
 

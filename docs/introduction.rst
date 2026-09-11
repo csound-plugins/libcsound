@@ -140,6 +140,38 @@ For linux csound 7 can be installed via:
     curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash
 
 
+Environment variables
+^^^^^^^^^^^^^^^^^^^^^
+
+The csound shared library is located and loaded when ``libcsound`` is imported,
+so the variables below must be set **before** importing ``libcsound``.
+
+``LIBCSOUNDPATH``
+    Absolute path to the csound shared library to load, for example
+    ``/usr/local/lib/libcsound64.so`` or
+    ``/Applications/Csound/CsoundLib64.framework/CsoundLib64``. It must point to
+    an existing file. When set, no other search is performed, which is useful
+    when csound is installed in a non-standard location or when several versions
+    are present. If not set, the library is searched in the system path (via
+    ``ctypes.util.find_library``, the RPATH/RUNPATH of the ``csound`` executable
+    and a number of standard installation locations).
+
+``LIBCSOUND_INSTALL``
+    Controls the automatic installation of csound when it cannot be found. Set
+    it to ``0`` or ``false`` to disable this behaviour. Any other value (or
+    leaving it unset) allows ``libcsound`` to download and install a portable
+    csound 7 release on Linux/macOS.
+
+``OPCODE7DIR64``
+    Determines the path where csound looks for plugins. It can contain multiple
+    paths, separated by ``:`` on Linux/macOS or ``;`` on Windows.
+
+``CS_USER_PLUGINDIR``
+    Path to user plugins. Set it to an empty string to disable searching for
+    user-installed plugins. This can be needed when using a portable version of
+    csound, where user plugins might be compiled for a different version.
+
+
 -------------------------
 
 Compatibility

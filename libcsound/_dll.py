@@ -341,33 +341,51 @@ def _findLibcsoundWindows() -> tuple[ct.CDLL, str] | str:
     return _findLibWindows('csound64.dll')
 
 
-def csoundDLL(install=True) -> tuple[ct.CDLL, str, str]:
+def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
     """
-    Finds and initialized libcsound
+    Find and initialize the csound shared library.
+
+    This function is called internally when ``libcsound`` is imported, in order
+    to determine where to load libcsound from.
+
+    Args:
+        install: if True and csound is not found, it is installed. Set the env
+            var ``LIBCSOUND_INSTALL`` to ``0`` or ``false`` to disable this
+            behaviour.
 
     Returns:
-        a tuple (cdll: ctypes.CDLL, path: str, opcodeDir: str), where cdll is the actual
-        CDLL object, path is the path used to load it and opcodeDir is the default
-        folder to use when loading plugins (will be empty if found a system
-        installed csound). At the moment this is only used if no csound installation
-        is used and the distributed portable csound is used instead
+        a tuple (cdll: ctypes.CDLL, path: str), where cdll is the actual
+        CDLL object and path is the path used to load it
 
-    This function is called internally to determine where to load
-    libcsound from. The only way to customize it is to set the environment
-    variable LIBCSOUNDPATH to the path of the library. If not set, the library
-    will be searched in the system path. If not found, an ImportError will be raised
+    Raises:
+        OSError: if given an explicit path via ``LIBCSOUNDPATH`` but that
+            failed to load
+        ImportError: if no csound was found and install=False or
+            ``LIBCSOUND_INSTALL=0``
 
-    If not explicitely set via LIBCSOUNDPATH, ctypes.util.find_library is used.
+    Environment variables:
+        ``LIBCSOUNDPATH``: if set, the absolute path to the csound shared
+            library to load. When set, no other search is performed. If not
+            set, the library is searched in the system path (via
+            ``ctypes.util.find_library``, the RPATH/RUNPATH of the ``csound``
+            executable and standard installation locations).
+        ``LIBCSOUND_INSTALL``: if set to ``0`` or ``false``, automatic
+            installation of csound is disabled.
     """
     global _libcsound
     global _libcsoundpath
-    global _opcodeDir
 
     if _libcsound is not None:
-        return _libcsound, _libcsoundpath, _opcodeDir
+        return _libcsound, _libcsoundpath
 
     if BUILDING_DOCS:
         raise RuntimeError("Cannot access the dll while building docs")
+
+    if install:
+        LIBCSOUND_INSTALL = os.getenv('LIBCSOUND_INSTALL')
+        if LIBCSOUND_INSTALL is not None and LIBCSOUND_INSTALL.lower() in ('0', 'false'):
+            logger.debug("Installation disabled via LIBCSOUND_INSTALL")
+            install = False
 
     if (libcsoundPathEnv := os.getenv("LIBCSOUNDPATH")):
         try:
@@ -381,7 +399,7 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str, str]:
         try:
             _libcsound = ct.CDLL(libcsoundPath)
             _libcsoundpath = libcsoundPath
-            return _libcsound, _libcsoundpath, ''
+            return _libcsound, _libcsoundpath
         except OSError as e:
             raise OSError(f"Could not init libcsound from LIBCSOUNDPATH "
                           f"'{libcsoundPathEnv}' (resolved to '{libcsoundPath}')") from e
@@ -400,7 +418,7 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str, str]:
     else:
         _libcsound, _libcsoundpath = out
         _opcodeDir = ''
-        return _libcsound, _libcsoundpath, _opcodeDir
+        return _libcsound, _libcsoundpath
 
     if install:
         if sys.platform == 'linux':

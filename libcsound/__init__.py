@@ -28,15 +28,38 @@
 #   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
 #   02110-1301 USA
 
-# Important env variables:
-# * LIBCSOUNDPATH: if given, will be used to load libcsound64. Should be an absolute path
-#   to an existing file. If not given, the library will be searched in the system path.
-# * OPCODE7DIR64: will determine the path were csound looks for plugins. Can include multiple
-#   paths, separated by : in linux/macos or ; in windows
-# * CS_USER_PLUGINDIR: path to user plugins. The path to search for user installed plugins,
-#   set it to an empty string to disable searching for user plugins. This can be needed
-#   if using a portable version of csound, where the user plugins might be compiled for
-#   a different version
+"""Python bindings for csound.
+
+The csound shared library is located and loaded when this package is imported,
+so the environment variables below must be set *before* importing ``libcsound``.
+
+Environment variables
+---------------------
+
+``LIBCSOUNDPATH``
+    If set, the absolute path to the csound shared library to load (e.g.
+    ``/usr/local/lib/libcsound64.so``). It must point to an existing file.
+    When set, no other search is performed, which is useful when csound is
+    installed in a non-standard location or when several versions are present.
+    If not set, the library is searched in the system path (via
+    ``ctypes.util.find_library``, the RPATH/RUNPATH of the ``csound``
+    executable and standard installation locations).
+
+``LIBCSOUND_INSTALL``
+    Controls the automatic installation of csound when it cannot be found. Set
+    it to ``0`` or ``false`` to disable this behaviour. Any other value (or
+    leaving it unset) allows ``libcsound`` to download and install a portable
+    csound 7 release on Linux/macOS.
+
+``OPCODE7DIR64``
+    Determines the path where csound looks for plugins. It can contain multiple
+    paths, separated by ``:`` on Linux/macOS or ``;`` on Windows.
+
+``CS_USER_PLUGINDIR``
+    Path to user plugins. Set it to an empty string to disable searching for
+    user-installed plugins. This can be needed when using a portable version of
+    csound, where user plugins might be compiled for a different version.
+"""
 
 from . import common
 
@@ -48,7 +71,7 @@ if not common.BUILDING_DOCS:
     np.finfo(np.dtype("float64"))
 
     from . import _dll
-    libcsound, libcsoundPath, opcodeDir = _dll.csoundDLL()
+    libcsound, libcsoundPath = _dll.csoundDLL()
     VERSION = libcsound.csoundGetVersion()
     if VERSION >= 7000:
         APIVERSION = VERSION
