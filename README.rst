@@ -15,7 +15,14 @@ Installation
 Csound
 ^^^^^^
 
-Csound needs to be installed in the system. See https://github.com/csound/csound/releases
+Csound does not need to be installed manually: when it cannot be found,
+``libcsound`` installs csound 7 automatically on import, on Linux, macOS and
+Windows (unless ``LIBCSOUND_INSTALL`` is set to ``0`` or ``false``). On macOS
+and Windows the automatic install needs an interactive, elevated session, so in
+non-interactive environments csound must be installed beforehand.
+
+To install csound manually instead, use the official installers. See
+https://github.com/csound/csound/releases
 
 In Linux / macOS:
 
@@ -29,10 +36,7 @@ In Windows:
 
    irm https://csound-plugins.github.io/getcsound.ps1 | iex
 
-
-This installs the latest version of csound 7. Csound is also installed
-automatically when it cannot be found and ``LIBCSOUND_INSTALL`` is not disabled
-(on Windows this needs an interactive, elevated session).
+This installs the latest version of csound 7.
 
    
 libcsound

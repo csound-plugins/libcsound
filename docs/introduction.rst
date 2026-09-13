@@ -8,9 +8,10 @@ Quick Start
 
 .. note::
 
-    *csound* should be installed before these bindings can be used. Any version 
-    >= 6.18 should work. **csound 7** is explicitely supported and is the recommended
-    version to use. See `installation`_.
+    Csound does not need to be installed manually: if it cannot be found it is
+    installed automatically on import (see `installation`_). Any version >= 6.18
+    can be used. **csound 7** is explicitly supported and is the recommended
+    version to use.
 
 
 Rendering in real-time
