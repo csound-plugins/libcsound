@@ -443,7 +443,7 @@ CSOUND_VAR_CHANNEL = 5
 if not BUILDING_DOCS:
     from . import _dll
     import ctypes.util
-    libcsound, libcsoundpath, opcodedir = _dll.csoundDLL()
+    libcsound, libcsoundpath = _dll.csoundDLL()
     if sys.platform.startswith('linux'):
         libcspt = ct.CDLL("libcsnd6.so")
     elif sys.platform.startswith('win'):
