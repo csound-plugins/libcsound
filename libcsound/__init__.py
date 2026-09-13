@@ -48,8 +48,9 @@ Environment variables
 ``LIBCSOUND_INSTALL``
     Controls the automatic installation of csound when it cannot be found. Set
     it to ``0`` or ``false`` to disable this behaviour. Any other value (or
-    leaving it unset) allows ``libcsound`` to download and install a portable
-    csound 7 release on Linux/macOS.
+    leaving it unset) allows ``libcsound`` to download and install csound 7 on
+    Linux, macOS and Windows. On Windows the install is machine-wide and needs
+    Administrator rights, so an interactive (or elevated) session is required.
 
 ``OPCODE7DIR64``
     Determines the path where csound looks for plugins. It can contain multiple

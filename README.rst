@@ -21,10 +21,18 @@ In Linux / macOS:
 
 .. code::
 
-   curl -fsSL https://csound-plugins.github.io/installer/install.sh | bash
+   curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash
+
+In Windows:
+
+.. code::
+
+   irm https://csound-plugins.github.io/getcsound.ps1 | iex
 
 
-This installs the latest version of csound 7. 
+This installs the latest version of csound 7. Csound is also installed
+automatically when it cannot be found and ``LIBCSOUND_INSTALL`` is not disabled
+(on Windows this needs an interactive, elevated session).
 
    
 libcsound

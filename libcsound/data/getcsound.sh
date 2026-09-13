@@ -8,6 +8,9 @@ Usage: getcsound.sh [OPTIONS] [-- BUNDLED-INSTALLER-OPTIONS]
 Options:
   --help       Show this help without downloading the installer.
   --help-all   Download the installer and show this help plus the bundled installer help.
+  --release    Install the installer published with the latest GitHub release
+               instead of the latest successful csound_builds workflow run
+               (macOS; Linux always installs from a release).
   --verbose    Show the download URLs and other diagnostic information.
 
 Arguments after -- are passed unchanged to the bundled installer. Use --help-all
@@ -20,6 +23,7 @@ EOF
 VERBOSE=0
 SHOW_HELP=0
 HELP_ALL=0
+USE_RELEASE=0
 INSTALLER_ARGS=()
 while (($#)); do
     case "$1" in
@@ -28,6 +32,9 @@ while (($#)); do
             ;;
         --help-all)
             HELP_ALL=1
+            ;;
+        --release)
+            USE_RELEASE=1
             ;;
         --verbose)
             VERBOSE=1
@@ -110,6 +117,10 @@ install_linux() {
     require_command curl
     require_command unzip
     require_command mktemp
+
+    if ((USE_RELEASE)); then
+        printf 'Note: --release has no effect on Linux; the portable release is always used.\n' >&2
+    fi
 
     # sha256sum is preferred; macOS's shasum is not used here because Linux is required,
     # but keep a fallback so the script is portable in case that restriction changes.
@@ -287,64 +298,95 @@ install_macos() {
     TMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TMP_DIR"' EXIT
 
-    # ─── Resolve the latest successful workflow run ─────────────────
-    RUN_ID="${CSOUND7_MACOS_RUN_ID:-}"
-    if [[ -z "$RUN_ID" ]]; then
-        echo "Looking for the latest successful ${WORKFLOW} run on branch '${BRANCH}' of ${REPO}..."
-        RUNS_URL="https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?branch=${BRANCH}&event=push&per_page=30"
-        verbose "Runs URL: ${RUNS_URL}"
-        if ! github_api_get "$RUNS_URL" "$TMP_DIR/runs.json"; then
-            error "Failed to query workflow runs."
-            error "URL: ${RUNS_URL}"
-            exit 1
-        fi
-        RUN_ID=$(awk '
-            /^      "id":/          { id = $2; gsub(/[",]/, "", id) }
-            /^      "conclusion":/  { c = $2; gsub(/[",]/, "", c)
-                                      if (c == "success" && id != "") { print id; exit } }
-        ' "$TMP_DIR/runs.json")
-        if [[ -z "$RUN_ID" ]]; then
-            error "No successful ${WORKFLOW} run found on branch '${BRANCH}' of ${REPO}."
-            error "Runs URL: ${RUNS_URL}"
-            exit 1
-        fi
-    fi
-    echo "Using workflow run: ${RUN_ID}"
-
-    # ─── Resolve the matching artifact ──────────────────────────────
-    ARTIFACT_NAME="${CSOUND7_MACOS_ARTIFACT:-}"
-    if [[ -z "$ARTIFACT_NAME" ]]; then
-        ARTIFACTS_URL="https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100"
-        verbose "Artifacts URL: ${ARTIFACTS_URL}"
-        if ! github_api_get "$ARTIFACTS_URL" "$TMP_DIR/artifacts.json"; then
-            error "Failed to list the artifacts of run ${RUN_ID}."
-            error "URL: ${ARTIFACTS_URL}"
-            exit 1
-        fi
-        while IFS= read -r name; do
-            # intentional glob match against the artifact name
-            # shellcheck disable=SC2254
-            case "$name" in
-                $ARTIFACT_GLOB)
-                    ARTIFACT_NAME="$name"
-                    break
-                    ;;
-            esac
-        done < <(awk '
-            /^      "name":/ { n = $0; sub(/^[^"]*"name": "/, "", n); sub(/",?$/, "", n) }
-            /^      "expired":/ { e = $0; sub(/^[^"]*"expired": /, "", e); sub(/,?$/, "", e)
-                                  if (e == "false") print n }
-        ' "$TMP_DIR/artifacts.json")
-        if [[ -z "$ARTIFACT_NAME" ]]; then
-            error "No artifact matching '${ARTIFACT_GLOB}' was found in run ${RUN_ID}."
-            exit 1
-        fi
-    fi
-    echo "Using artifact: ${ARTIFACT_NAME}"
-
-    # ─── Download via nightly.link ──────────────────────────────────
     ZIP_FILE="${TMP_DIR}/macos.zip"
-    DOWNLOAD_URL="https://nightly.link/${REPO}/actions/runs/${RUN_ID}/${ARTIFACT_NAME}.zip"
+
+    if ((USE_RELEASE)); then
+        # ─── Resolve the latest release ─────────────────────────────
+        RELEASE_TAG="${CSOUND7_RELEASE_TAG:-latest}"
+        if [[ "$RELEASE_TAG" == "latest" ]]; then
+            RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
+            echo "Looking for the latest release of ${REPO}..."
+        else
+            RELEASE_URL="https://api.github.com/repos/${REPO}/releases/tags/${RELEASE_TAG}"
+            echo "Looking for release ${RELEASE_TAG} of ${REPO}..."
+        fi
+        verbose "Release URL: ${RELEASE_URL}"
+        if ! github_api_get "$RELEASE_URL" "$TMP_DIR/release.json"; then
+            error "Failed to query the release."
+            error "URL: ${RELEASE_URL}"
+            exit 1
+        fi
+        RELEASE_TAG=$(awk -F'"' '/"tag_name":/ { print $4; exit }' "$TMP_DIR/release.json")
+        if [[ -z "$RELEASE_TAG" ]]; then
+            error "Could not determine the release tag."
+            error "URL: ${RELEASE_URL}"
+            exit 1
+        fi
+        echo "Using release: ${RELEASE_TAG}"
+        ARTIFACT_NAME="csound-macos-${RELEASE_TAG}.zip"
+        DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${ARTIFACT_NAME}"
+    else
+        # ─── Resolve the latest successful workflow run ─────────────
+        RUN_ID="${CSOUND7_MACOS_RUN_ID:-}"
+        if [[ -z "$RUN_ID" ]]; then
+            echo "Looking for the latest successful ${WORKFLOW} run on branch '${BRANCH}' of ${REPO}..."
+            RUNS_URL="https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?branch=${BRANCH}&event=push&per_page=30"
+            verbose "Runs URL: ${RUNS_URL}"
+            if ! github_api_get "$RUNS_URL" "$TMP_DIR/runs.json"; then
+                error "Failed to query workflow runs."
+                error "URL: ${RUNS_URL}"
+                exit 1
+            fi
+            RUN_ID=$(awk '
+                /^      "id":/          { id = $2; gsub(/[",]/, "", id) }
+                /^      "conclusion":/  { c = $2; gsub(/[",]/, "", c)
+                                          if (c == "success" && id != "") { print id; exit } }
+            ' "$TMP_DIR/runs.json")
+            if [[ -z "$RUN_ID" ]]; then
+                error "No successful ${WORKFLOW} run found on branch '${BRANCH}' of ${REPO}."
+                error "Runs URL: ${RUNS_URL}"
+                exit 1
+            fi
+        fi
+        echo "Using workflow run: ${RUN_ID}"
+
+        # ─── Resolve the matching artifact ──────────────────────────
+        ARTIFACT_NAME="${CSOUND7_MACOS_ARTIFACT:-}"
+        if [[ -z "$ARTIFACT_NAME" ]]; then
+            ARTIFACTS_URL="https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100"
+            verbose "Artifacts URL: ${ARTIFACTS_URL}"
+            if ! github_api_get "$ARTIFACTS_URL" "$TMP_DIR/artifacts.json"; then
+                error "Failed to list the artifacts of run ${RUN_ID}."
+                error "URL: ${ARTIFACTS_URL}"
+                exit 1
+            fi
+            while IFS= read -r name; do
+                # intentional glob match against the artifact name
+                # shellcheck disable=SC2254
+                case "$name" in
+                    $ARTIFACT_GLOB)
+                        ARTIFACT_NAME="$name"
+                        break
+                        ;;
+                esac
+            done < <(awk '
+                /^      "name":/ { n = $0; sub(/^[^"]*"name": "/, "", n); sub(/",?$/, "", n) }
+                /^      "expired":/ { e = $0; sub(/^[^"]*"expired": /, "", e); sub(/,?$/, "", e)
+                                      if (e == "false") print n }
+            ' "$TMP_DIR/artifacts.json")
+            if [[ -z "$ARTIFACT_NAME" ]]; then
+                error "No artifact matching '${ARTIFACT_GLOB}' was found in run ${RUN_ID}."
+                exit 1
+            fi
+        fi
+        echo "Using artifact: ${ARTIFACT_NAME}"
+
+        # ─── Download via nightly.link ──────────────────────────────
+        # GitHub Actions artifacts cannot be downloaded anonymously, so the
+        # archive is fetched through the nightly.link mirror.
+        DOWNLOAD_URL="https://nightly.link/${REPO}/actions/runs/${RUN_ID}/${ARTIFACT_NAME}.zip"
+    fi
+
     verbose "Download URL: ${DOWNLOAD_URL}"
     echo "Downloading ${ARTIFACT_NAME}..."
     if ! curl -fsSL -o "$ZIP_FILE" "$DOWNLOAD_URL"; then

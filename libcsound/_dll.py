@@ -303,7 +303,9 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str] | str:
     return _format_report(report)
 
 
-_DEFAULT_WINDOWS_PATHS: tuple[str, ...] = (r"C:\Program Files\csound",
+_DEFAULT_WINDOWS_PATHS: tuple[str, ...] = (r"C:\Program Files\Csound7\bin",
+                                           r"C:\Program Files\Csound7",
+                                           r"C:\Program Files\csound",
                                            r"C:\Program Files\csound\bin")
 
 
@@ -427,6 +429,9 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
         elif sys.platform == 'darwin':
             _install_csound_macos()
             return csoundDLL(install=False)
+        elif sys.platform.startswith('win'):
+            _install_csound_windows()
+            return csoundDLL(install=False)
 
     if sys.platform in ('linux', 'darwin'):
         raise ImportError("libcsound not found. It can be installed via:\n"
@@ -436,7 +441,10 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
         raise ImportError("Csound library not found. "
                           "Make sure that csound is installed and the directory containing "
                           f"csound64.dll is in the path. PATH='{os.environ.get('PATH')}'\n"
-                          "csound can be installed from https://github.com/csound/csound/releases\n"
+                          "Csound 7 can be installed automatically, but the installer needs "
+                          "Administrator rights and an interactive (or elevated) session; "
+                          "install it manually via:\n"
+                          "    irm https://csound-plugins.github.io/getcsound.ps1 | iex\n"
                           f"Search report:\n{report_text}")
     else:
         raise ImportError(f"Did not find csound library in {sys.platform}")
@@ -655,3 +663,84 @@ def _install_csound_macos() -> None:
 
     raise RuntimeError("csound 7 installation failed: "
                        "CsoundLib64 was not found in /Applications/Csound")
+
+
+def _install_csound_windows() -> None:
+    """Install the latest csound 7 for Windows by running the bundled installer.
+
+    This runs the bundled copy of the official installer at
+    https://csound-plugins.github.io/getcsound.ps1 with Windows PowerShell. The
+    installer resolves the latest successful ``csound_builds`` workflow run of
+    the ``csound/csound`` repository on the ``develop`` branch, downloads the
+    Windows x86_64 Inno Setup package and installs it silently to
+    ``%ProgramFiles%\\Csound7``. Windows on ARM64 is not supported yet.
+
+    The Inno Setup package installs machine-wide and needs Administrator
+    rights: when the current session is not elevated the installer triggers a
+    UAC prompt, so an interactive (or pre-elevated) session is required. On CI
+    runners the session is usually already elevated.
+
+    After a successful installation the environment variables ``LIBCSOUNDPATH``
+    and ``OPCODE7DIR64`` are set to point to the installed library and plugin
+    directory, so that the current process can find csound immediately without
+    the need to open a new terminal.
+
+    Raises:
+        RuntimeError: if PowerShell or the bundled installer could not be found,
+            if the installer failed, or if no csound installation could be
+            located after running it.
+    """
+    import importlib.resources
+    import shutil
+    import subprocess
+
+    installer = importlib.resources.files(__package__).joinpath("data", "getcsound.ps1")
+    if not installer.is_file():
+        raise RuntimeError(f"The bundled installer was not found: {installer}")
+
+    powershell = shutil.which("powershell") or shutil.which("pwsh")
+    if not powershell:
+        raise RuntimeError(
+            "PowerShell was not found. It is needed to install csound on Windows.\n"
+            "Alternatively, csound can be installed manually:\n"
+            "    irm https://csound-plugins.github.io/getcsound.ps1 | iex"
+        )
+
+    # as_file() yields a real filesystem path, extracting to a temporary file
+    # first when the package is loaded from an archive (e.g. a zip).
+    with importlib.resources.as_file(installer) as script:
+        logger.info("Running bundled installer: %s", script)
+        result = subprocess.run(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)]
+        )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"The bundled installer exited with status {result.returncode}\n"
+            "The Csound Windows installer installs machine-wide and needs "
+            "Administrator rights: run it from an interactive (or elevated) "
+            "PowerShell session.\n"
+            "Alternatively, csound can be installed manually:\n"
+            "    irm https://csound-plugins.github.io/getcsound.ps1 | iex"
+        )
+
+    # Make the freshly installed csound available to the current process
+    programfiles = (os.environ.get("ProgramW6432")
+                    or os.environ.get("ProgramFiles")
+                    or r"C:\Program Files")
+    csound_dir = Path(programfiles) / "Csound7"
+    bindir = csound_dir / "bin"
+    libpath = bindir / "csound64.dll"
+    pluginspath = csound_dir / "plugins64"
+    if libpath.is_file():
+        os.environ["LIBCSOUNDPATH"] = str(libpath.resolve())
+        # The machine-wide PATH set by the installer is not visible to this
+        # process yet, so add the bin directory here to let csound's dependent
+        # DLLs (e.g. libsndfile) be resolved when the library is loaded.
+        os.environ["PATH"] = str(bindir.resolve()) + os.pathsep + os.environ.get("PATH", "")
+        if pluginspath.is_dir():
+            os.environ['OPCODE7DIR64'] = str(pluginspath.resolve())
+        logger.info("Csound installed successfully to %s", csound_dir)
+        return
+
+    raise RuntimeError("csound 7 installation failed: csound64.dll was not found in "
+                       f"'{bindir}'")

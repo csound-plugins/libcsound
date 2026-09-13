@@ -231,3 +231,39 @@ jobs:
         with:
           name: macos-install-render-${{ matrix.python-version }}
           path: test/out.wav
+
+  windows-autoinstall:
+    # Tests the automatic csound installation triggered on import when csound is
+    # not present: the bundled getcsound.ps1 resolves the latest csound 7
+    # Windows installer from the csound/csound "develop" builds and installs it
+    # silently to %ProgramFiles%\Csound7. GitHub-hosted Windows runners are
+    # already elevated, so the machine-wide Inno Setup install needs no UAC
+    # prompt.
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install from repo
+        run: |
+          pip install .
+
+      - name: import libcsound (auto-installs csound) and render offline
+        working-directory: test
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python windows-install-render.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-install-render-${{ matrix.python-version }}
+          path: test/out.wav
