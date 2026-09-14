@@ -136,8 +136,23 @@ function Invoke-GitHubApi {
         'User-Agent' = 'getcsound-installer'
         'Accept'     = 'application/vnd.github+json'
     }
-    if ($script:Token) { $headers['Authorization'] = "Bearer $($script:Token)" }
+    if ($script:Token) {
+        $authHeaders = $headers.Clone()
+        $authHeaders['Authorization'] = "Bearer $($script:Token)"
+        try {
+            return Invoke-RestMethod -Uri $Url -Headers $authHeaders -Method Get
+        } catch {
+            # The token may be invalid or expired; retry anonymously.
+            Write-VerboseLine 'Request with token failed; retrying anonymously...'
+        }
+    }
     return Invoke-RestMethod -Uri $Url -Headers $headers -Method Get
+}
+
+function Write-ApiErrorHint {
+    Write-Err 'This usually means the GitHub API rate limit was exceeded.'
+    Write-Err 'Set CSOUND7_GH_TOKEN, GH_TOKEN or GITHUB_TOKEN to authenticate,'
+    Write-Err 'or install the GitHub CLI and run ''gh auth login''.'
 }
 
 function Save-Url {
@@ -191,11 +206,25 @@ $ArtifactGlob = if ($env:CSOUND7_WINDOWS_ASSET)   { $env:CSOUND7_WINDOWS_ASSET }
 $ExeGlob      = if ($env:CSOUND7_WINDOWS_EXE)     { $env:CSOUND7_WINDOWS_EXE }     else { 'Csound7-windows_x86_64-*.exe' }
 
 # Use a token for the GitHub API queries when one is available in the
-# environment (e.g. GITHUB_TOKEN on CI); anonymous otherwise.
+# environment (e.g. GITHUB_TOKEN on CI). As a fallback, when no environment
+# token is set and the GitHub CLI is available, `gh auth token` is used.
+# Anonymous otherwise.
 $Token = if ($env:CSOUND7_GH_TOKEN) { $env:CSOUND7_GH_TOKEN }
          elseif ($env:GH_TOKEN)     { $env:GH_TOKEN }
          elseif ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN }
          else                       { '' }
+if (-not $Token) {
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($gh) {
+        try {
+            $Token = (& gh auth token 2>$null | Select-Object -First 1)
+        } catch {
+            $Token = ''
+        }
+        if ($null -eq $Token) { $Token = '' }
+        $Token = $Token.Trim()
+    }
+}
 
 # GitHub now requires TLS 1.2; Windows PowerShell 5.1 does not enable it by
 # default.
@@ -232,6 +261,7 @@ try {
             Write-Err 'Failed to query the release.'
             Write-Err "URL: $releaseUrl"
             Write-Err $_.Exception.Message
+            Write-ApiErrorHint
             exit 1
         }
         $ReleaseTag = $release.tag_name
@@ -256,6 +286,7 @@ try {
                 Write-Err 'Failed to query workflow runs.'
                 Write-Err "URL: $runsUrl"
                 Write-Err $_.Exception.Message
+                Write-ApiErrorHint
                 exit 1
             }
             $run = $runs.workflow_runs | Where-Object { $_.conclusion -eq 'success' } | Select-Object -First 1
@@ -279,6 +310,7 @@ try {
                 Write-Err "Failed to list the artifacts of run $RunId."
                 Write-Err "URL: $artifactsUrl"
                 Write-Err $_.Exception.Message
+                Write-ApiErrorHint
                 exit 1
             }
             $artifact = $artifacts.artifacts |

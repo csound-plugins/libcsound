@@ -75,18 +75,45 @@ require_command() {
     fi
 }
 
+# api_error_hint
+#
+# Explain a failed GitHub API query. Anonymous requests from shared runner IPs
+# are commonly rejected with HTTP 403 because the rate limit was exceeded.
+api_error_hint() {
+    error "This usually means the GitHub API rate limit was exceeded."
+    error "Set CSOUND7_GH_TOKEN, GH_TOKEN or GITHUB_TOKEN to authenticate,"
+    error "or install the GitHub CLI and run 'gh auth login'."
+}
+
+# resolve_github_token
+#
+# Return a GitHub token to authenticate API requests. The token is taken from
+# the environment (CSOUND7_GH_TOKEN, GH_TOKEN or GITHUB_TOKEN). As a fallback,
+# when none of those is set and the GitHub CLI is available, `gh auth token` is
+# used. Prints an empty string when no token can be found.
+resolve_github_token() {
+    local token="${CSOUND7_GH_TOKEN:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+    if [[ -z "$token" ]] && command -v gh >/dev/null 2>&1; then
+        token=$(gh auth token 2>/dev/null || true)
+    fi
+    printf '%s' "$token"
+}
+
 # github_api_get URL OUTFILE
 #
 # GitHub's API rate-limits anonymous requests (shared runner IPs are often
 # blocked with HTTP 403). When GH_TOKEN is set it is used to authenticate;
-# otherwise the request stays anonymous.
+# otherwise the request stays anonymous. If an authenticated request fails
+# (e.g. an expired token) the request is retried anonymously.
 github_api_get() {
     local url=$1 out=$2
     if [[ -n "${GH_TOKEN:-}" ]]; then
-        curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -o "$out" "$url"
-    else
-        curl -fsSL -o "$out" "$url"
+        if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -o "$out" "$url"; then
+            return 0
+        fi
+        verbose "Request with token failed; retrying anonymously..."
     fi
+    curl -fsSL -o "$out" "$url"
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -300,9 +327,10 @@ install_macos() {
     BRANCH="${CSOUND7_MACOS_BRANCH:-develop}"
     ARTIFACT_GLOB="${CSOUND7_MACOS_ASSET:-csound-7.*-macos*}"
 
-    # Use a token for the GitHub API queries when one is available in the
-    # environment (e.g. GITHUB_TOKEN on CI); anonymous otherwise.
-    GH_TOKEN="${CSOUND7_GH_TOKEN:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+    # Use a token for the GitHub API queries when one is available (from the
+    # environment, e.g. GITHUB_TOKEN on CI, or as a fallback from `gh auth
+    # token`); anonymous otherwise.
+    GH_TOKEN=$(resolve_github_token)
 
     # ─── Prepare temporary directory ────────────────────────────────
     TMP_DIR=$(mktemp -d)
@@ -324,6 +352,7 @@ install_macos() {
         if ! github_api_get "$RELEASE_URL" "$TMP_DIR/release.json"; then
             error "Failed to query the release."
             error "URL: ${RELEASE_URL}"
+            api_error_hint
             exit 1
         fi
         RELEASE_TAG=$(awk -F'"' '/"tag_name":/ { print $4; exit }' "$TMP_DIR/release.json")
@@ -345,6 +374,7 @@ install_macos() {
             if ! github_api_get "$RUNS_URL" "$TMP_DIR/runs.json"; then
                 error "Failed to query workflow runs."
                 error "URL: ${RUNS_URL}"
+                api_error_hint
                 exit 1
             fi
             RUN_ID=$(awk '
@@ -368,6 +398,7 @@ install_macos() {
             if ! github_api_get "$ARTIFACTS_URL" "$TMP_DIR/artifacts.json"; then
                 error "Failed to list the artifacts of run ${RUN_ID}."
                 error "URL: ${ARTIFACTS_URL}"
+                api_error_hint
                 exit 1
             fi
             while IFS= read -r name; do
