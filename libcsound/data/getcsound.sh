@@ -253,8 +253,9 @@ install_linux() {
 # universal .pkg, which we install with macOS's "installer" command.
 #
 # GitHub Actions artifacts cannot be downloaded anonymously, so the archive is
-# fetched through the nightly.link mirror. Because installation runs under
-# sudo, this path requires an interactive terminal session.
+# fetched through the nightly.link mirror. Installation runs under sudo: an
+# interactive terminal is used when available so that sudo can prompt for the
+# password, otherwise the install proceeds if sudo is passwordless.
 #
 # Trust model:
 #   - The artifact is downloaded over HTTPS and installed unmodified.
@@ -273,12 +274,21 @@ install_macos() {
     require_command curl
     require_command mktemp
 
-    # The install step runs under sudo, so an interactive terminal is required
-    # to let sudo prompt for credentials. Refuse to run otherwise.
+    # The install step runs under sudo. When a terminal is available, sudo can
+    # prompt for a password as usual. Without a terminal (e.g. on CI) the
+    # install can still proceed when sudo runs without a password (passwordless
+    # sudo, as on GitHub-hosted runners); otherwise refuse to run.
+    SUDO=(sudo)
+    SUDO_NONINTERACTIVE=0
     if [[ ! -t 0 ]] && ! (exec 3<>/dev/tty) 2>/dev/null; then
-        error "The macOS installer needs sudo and must be run from a terminal."
-        error "Please run it from an interactive Terminal session."
-        exit 1
+        if sudo -n true 2>/dev/null; then
+            SUDO=(sudo -n)
+            SUDO_NONINTERACTIVE=1
+        else
+            error "The macOS installer needs sudo and must be run from a terminal."
+            error "Please run it from an interactive Terminal session."
+            exit 1
+        fi
     fi
 
     if ((${#INSTALLER_ARGS[@]})); then
@@ -420,8 +430,12 @@ install_macos() {
     echo "Package: $(basename "$PKG")"
 
     # ─── Install ────────────────────────────────────────────────────
-    echo "Installing Csound with the system installer (sudo may prompt for your password)..."
-    sudo /usr/sbin/installer -pkg "$PKG" -target /
+    if ((SUDO_NONINTERACTIVE)); then
+        echo "Installing Csound with the system installer (passwordless sudo)..."
+    else
+        echo "Installing Csound with the system installer (sudo may prompt for your password)..."
+    fi
+    "${SUDO[@]}" /usr/sbin/installer -pkg "$PKG" -target /
     echo "Csound installed successfully."
 }
 

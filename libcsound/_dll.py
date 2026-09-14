@@ -367,10 +367,10 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
 
     Environment variables:
         ``LIBCSOUNDPATH``: if set, the absolute path to the csound shared
-            library to load. When set, no other search is performed. If not
-            set, the library is searched in the system path (via
+            library to load (no other search is performed). Otherwise,
+            the library is searched in the system path (via
             ``ctypes.util.find_library``, the RPATH/RUNPATH of the ``csound``
-            executable and standard installation locations).
+            executable and standard locations).
         ``LIBCSOUND_INSTALL``: if set to ``0`` or ``false``, automatic
             installation of csound is disabled.
     """
@@ -442,8 +442,8 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
                           "Make sure that csound is installed and the directory containing "
                           f"csound64.dll is in the path. PATH='{os.environ.get('PATH')}'\n"
                           "Csound 7 can be installed automatically, but the installer needs "
-                          "Administrator rights and an interactive (or elevated) session; "
-                          "install it manually via:\n"
+                          "admin rights and an interactive (or elevated) session; "
+                          "install it manually from a powershell console via:\n"
                           "    irm https://csound-plugins.github.io/getcsound.ps1 | iex\n"
                           f"Search report:\n{report_text}")
     else:
@@ -482,7 +482,7 @@ def _download(url: str, target: str, verbose=False) -> None:
 def _install_csound_linux() -> None:
     """Install the latest csound 7 portable release for linux.
 
-    This mirrors the bootstrapping process of the one-line installer at
+    This mirrors the process of the one-line installer at
     https://csound-plugins.github.io/getcsound.sh
 
     It downloads the release asset ``csound7-linux-<arch>.zip`` from the
@@ -493,14 +493,14 @@ def _install_csound_linux() -> None:
     installed to ``~/.local/csound``
 
     After a successful installation, the environment variables ``LIBCSOUNDPATH``
-    and ``OPCODE7DIR64`` are set to point to the installed library and plugin
-    directory, so that the current process can find csound immediately without
+    and ``OPCODE7DIR64`` point to the installed library and plugin
+    directory, so that the current process can find csound without
     the need to open a new terminal.
 
     Raises:
         RuntimeError: if the download or the checksum verification failed, if the
-            bundled ``install.sh`` could not be found or failed, or if no csound
-            installation could be located after running the installer.
+            bundled ``install.sh`` could not be found or failed, or if csound
+            could not be located post installation.
     """
     import platform
     import stat
@@ -612,18 +612,20 @@ def _install_csound_macos() -> None:
 
     The official Csound 7 macOS package is produced by the "csound_builds"
     workflow of the csound/csound repository on the "develop" branch and is
-    installed with the system ``installer`` under sudo, so an interactive
-    terminal session is required.
+    installed with the system ``installer`` under sudo. An interactive terminal
+    session is used when available (so sudo can prompt for the password). 
+    When there is no terminal (e.g. on CI) the install still succeeds if sudo is
+    configured to run password-less.
 
     This runs the bundled copy of the one-line installer used at
     https://csound-plugins.github.io/getcsound.sh, which resolves the latest
     successful workflow run, downloads its ``csound-7.*-macos*`` artifact
     through the anonymous nightly.link mirror and installs the extracted .pkg.
 
-    After a successful installation the environment variables ``LIBCSOUNDPATH``
-    and ``OPCODE7DIR64`` are set to point to the installed library and plugin
+    After installation the environment variables ``LIBCSOUNDPATH``
+    and ``OPCODE7DIR64`` point to the installed library and plugin
     directory, so that the current process can find csound immediately without
-    the need to open a new terminal.
+    the need to open a new session.
 
     Raises:
         RuntimeError: if the bundled installer could not be found or failed, or
@@ -645,7 +647,7 @@ def _install_csound_macos() -> None:
         raise RuntimeError(
             f"The bundled installer exited with status {result.returncode}\n"
             "The csound macOS .pkg is installed with sudo and needs an interactive "
-            "terminal session.\n"
+            "terminal (or passwordless sudo).\n"
             "Alternatively, csound can be installed manually:\n"
             "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash"
         )
@@ -675,14 +677,14 @@ def _install_csound_windows() -> None:
     Windows x86_64 Inno Setup package and installs it silently to
     ``%ProgramFiles%\\Csound7``. Windows on ARM64 is not supported yet.
 
-    The Inno Setup package installs machine-wide and needs Administrator
-    rights: when the current session is not elevated the installer triggers a
-    UAC prompt, so an interactive (or pre-elevated) session is required. On CI
-    runners the session is usually already elevated.
+    The package is installed machine-wide and needs admin rights: when the current 
+    session is not elevated the installer triggers a UAC prompt, so an interactive 
+    (or pre-elevated) session is required. On CI runners the session is usually 
+    already elevated.
 
-    After a successful installation the environment variables ``LIBCSOUNDPATH``
+    After a successful installation the env vars ``LIBCSOUNDPATH``
     and ``OPCODE7DIR64`` are set to point to the installed library and plugin
-    directory, so that the current process can find csound immediately without
+    folder, so that the current process can find csound immediately without
     the need to open a new terminal.
 
     Raises:
@@ -717,7 +719,7 @@ def _install_csound_windows() -> None:
         raise RuntimeError(
             f"The bundled installer exited with status {result.returncode}\n"
             "The Csound Windows installer installs machine-wide and needs "
-            "Administrator rights: run it from an interactive (or elevated) "
+            "admin rights: run it from an interactive (or elevated) "
             "PowerShell session.\n"
             "Alternatively, csound can be installed manually:\n"
             "    irm https://csound-plugins.github.io/getcsound.ps1 | iex"

@@ -129,10 +129,12 @@ Csound
 ^^^^^^
 
 When csound cannot be found, ``libcsound`` installs it automatically on import
-(unless ``LIBCSOUND_INSTALL`` is set to ``0`` or ``false``). To install csound
-manually, or when the automatic installation is not possible (on macOS and
-Windows it needs an interactive, elevated session), use the official installers
-or see https://github.com/csound/csound/releases.
+(unless ``LIBCSOUND_INSTALL`` is set to ``0`` or ``false``). On macOS the install
+runs under sudo, so it needs either an interactive terminal or passwordless
+sudo (as on CI runners); on Windows it is machine-wide and needs Administrator
+rights, so an interactive or already-elevated session is required. To install
+csound manually, or when the automatic installation is not possible, use the
+official installers or see https://github.com/csound/csound/releases.
 
 **Linux / macOS**
 
@@ -167,8 +169,10 @@ so the variables below must be set **before** importing ``libcsound``.
     Controls the automatic installation of csound when it cannot be found. Set
     it to ``0`` or ``false`` to disable this behaviour. Any other value (or
     leaving it unset) allows ``libcsound`` to download and install csound 7 on
-    Linux, macOS and Windows. On Windows the install is machine-wide and needs
-    Administrator rights, so an interactive (or elevated) session is required.
+    Linux, macOS and Windows. On macOS the install runs under sudo and needs an
+    interactive terminal or passwordless sudo; on Windows it is machine-wide and
+    needs Administrator rights, so an interactive or already-elevated session is
+    required.
 
 ``OPCODE7DIR64``
     Determines the path where csound looks for plugins. It can contain multiple
