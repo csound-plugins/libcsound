@@ -47,7 +47,7 @@ def main() -> None:
     print("libcsound imported OK", flush=True)
     print(f"  csound version: {libcsound.VERSION}")
     print(f"  libcsound path: {libcsound.libcsoundPath}")
-    print(f"  opcode dir:     {libcsound.opcodeDir}")
+    print(f"  opcode dir:     {os.environ.get('OPCODE7DIR64', '')}")
 
     # Sanity checks that the auto-installer really ran and left a working install
     if not os.path.exists("/Applications/Csound/csound"):
