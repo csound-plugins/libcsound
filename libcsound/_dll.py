@@ -450,6 +450,60 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
         raise ImportError(f"Did not find csound library in {sys.platform}")
 
 
+def _default_user_plugins_dir(version: int | None = None) -> Path:
+    """Return csound's default user plugin directory for this platform.
+
+    This mirrors the ``CS_DEFAULT_USER_PLUGINDIR`` value that csound would
+    normally compile in. The official macOS installer builds csound with
+    ``CS_OPCODE_DIR`` set, which currently makes csound skip this default, so
+    ``CS_USER_PLUGINDIR`` must be set explicitly for user plugins to be found
+    (upstream fix pending).
+
+    Args:
+        version: the csound version as returned by ``csoundGetVersion()``
+            (e.g. ``7000`` for csound 7.0). If not given, the version of the
+            loaded csound library is queried.
+
+    Returns:
+        the default user plugin directory. It does not need to exist.
+    """
+    if version is None:
+        if _libcsound is None:
+            raise RuntimeError("libcsound is not loaded, cannot determine the csound version")
+        version = int(_libcsound.csoundGetVersion())
+    apiversion = f"{version // 1000}.0"
+    if sys.platform == 'darwin':
+        return Path.home() / "Library" / "csound" / apiversion / "plugins64"
+    elif sys.platform == 'linux':
+        return Path.home() / ".local" / "lib" / "csound" / apiversion / "plugins64"
+    elif sys.platform.startswith('win'):
+        localappdata = os.environ.get("LOCALAPPDATA")
+        base = Path(localappdata) if localappdata else Path.home() / "AppData" / "Local"
+        return base / "csound" / apiversion / "plugins64"
+    else:
+        raise RuntimeError(f"Unsupported platform: {sys.platform}")
+
+
+def _ensure_user_plugins_dir(version: int | None = None) -> None:
+    """Set ``CS_USER_PLUGINDIR`` to csound's default if it is not already set.
+
+    This is only done on macOS, where the official csound build does not search
+    the default user plugin directory (see ``_default_user_plugins_dir``). On
+    other platforms csound already searches it, and setting the variable
+    explicitly would only add a warning when the directory does not exist.
+    Existing values are never overridden.
+
+    Temporary workaround until the fix is merged upstream in csound.
+    """
+    if sys.platform != 'darwin':
+        return
+    if os.environ.get("CS_USER_PLUGINDIR") is not None:
+        return
+    pluginsdir = _default_user_plugins_dir(version)
+    logger.debug("Setting CS_USER_PLUGINDIR to '%s'", pluginsdir)
+    os.environ["CS_USER_PLUGINDIR"] = str(pluginsdir)
+
+
 def _hexdigest(path: str) -> str:
     hashsum = hashlib.sha256()
     with open(path, "rb") as f:

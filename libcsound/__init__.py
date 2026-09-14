@@ -79,6 +79,10 @@ if not common.BUILDING_DOCS:
     else:
         APIVERSION = libcsound.csoundGetAPIVersion()
 
+    # Temporary workaround: the official macOS build of csound does not search
+    # its default user plugin directory, so point CS_USER_PLUGINDIR at it.
+    _dll._ensure_user_plugins_dir(VERSION)
+
     if VERSION < 7000:
         from .api6 import *
     else:
