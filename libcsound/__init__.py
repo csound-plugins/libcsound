@@ -51,6 +51,9 @@ Environment variables
     leaving it unset) allows ``libcsound`` to download and install csound 7 on
     Linux, macOS and Windows. On Windows the install is machine-wide and needs
     Administrator rights, so an interactive (or elevated) session is required.
+    If csound can neither be found nor installed, importing ``libcsound``
+    raises ``ImportError`` (the underlying cause is chained and quoted in the
+    message).
 
 ``OPCODE7DIR64``
     Determines the path where csound looks for plugins. It can contain multiple

@@ -282,8 +282,15 @@ def _findLibcsoundLinux() -> tuple[ct.CDLL, str] | str:
         return dll, libcsound_rpath
 
     def step4():
+        # Explicit probe of well-known locations. This does not rely on the
+        # loader cache (ldconfig), the csound binary being on PATH (step3) or
+        # any env var, so it also finds a system-wide install whose ld cache
+        # is stale (e.g. portable install to /usr/local without ldconfig
+        # having been re-run) instead of triggering a needless reinstall.
         HOME = Path.home()
-        for path in [HOME/".local/csound/libcsound64.so"]:
+        for path in [HOME/".local/csound/libcsound64.so",
+                     Path("/usr/local/lib/libcsound64.so"),
+                     Path("/usr/lib/libcsound64.so")]:
             if not path.exists():
                 report.append(f"'{path}' does not exist")
                 continue
@@ -331,11 +338,18 @@ def _findLibWindows(libname: str,
 
 
 def findLibWindows(libname: str,
-                   possible_paths: Sequence[str] = _DEFAULT_WINDOWS_PATHS
-                   ) -> tuple[ct.CDLL | None, str]:
+                    possible_paths: Sequence[str] = _DEFAULT_WINDOWS_PATHS
+                    ) -> tuple[ct.CDLL | None, str]:
+    """Locate a Windows DLL by name and in ``possible_paths``.
+
+    Returns:
+        a tuple (cdll, report), where cdll is the loaded library or None if
+        it was not found, and report is the path used on success or the
+        diagnostic search report on failure.
+    """
     out = _findLibWindows(libname, possible_paths)
     if isinstance(out, str):
-        return None, ''
+        return None, out
     return out
 
 
@@ -360,10 +374,12 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
         CDLL object and path is the path used to load it
 
     Raises:
-        OSError: if given an explicit path via ``LIBCSOUNDPATH`` but that
-            failed to load
-        ImportError: if no csound was found and install=False or
-            ``LIBCSOUND_INSTALL=0``
+        ImportError: if csound cannot be made available. This covers a
+            ``LIBCSOUNDPATH`` that does not resolve or fails to load, a failed
+            automatic installation, and the case where no csound was found
+            with installation disabled (``install=False`` or
+            ``LIBCSOUND_INSTALL=0``). The original error is always chained
+            (``__cause__``) and its detail is included in the message.
 
     Environment variables:
         ``LIBCSOUNDPATH``: if set, the absolute path to the csound shared
@@ -393,18 +409,18 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
         try:
             libcsoundPath = str(Path(libcsoundPathEnv).resolve())
         except (OSError, RuntimeError) as e:
-            raise OSError(f"Could not resolve LIBCSOUNDPATH '{libcsoundPathEnv}': {e}") from e
+            raise ImportError(f"Could not resolve LIBCSOUNDPATH '{libcsoundPathEnv}': {e}") from e
 
         if not os.path.isfile(libcsoundPath):
-            raise OSError(f"The env variable LIBCSOUNDPATH '{libcsoundPathEnv}' does not point to an existing file")
+            raise ImportError(f"The env variable LIBCSOUNDPATH '{libcsoundPathEnv}' does not point to an existing file")
 
         try:
             _libcsound = ct.CDLL(libcsoundPath)
             _libcsoundpath = libcsoundPath
             return _libcsound, _libcsoundpath
         except OSError as e:
-            raise OSError(f"Could not init libcsound from LIBCSOUNDPATH "
-                          f"'{libcsoundPathEnv}' (resolved to '{libcsoundPath}')") from e
+            raise ImportError(f"Could not init libcsound from LIBCSOUNDPATH "
+                              f"'{libcsoundPathEnv}' (resolved to '{libcsoundPath}'): {e}") from e
 
     if sys.platform == 'linux':
         out = _findLibcsoundLinux()
@@ -423,15 +439,18 @@ def csoundDLL(install=True) -> tuple[ct.CDLL, str]:
         return _libcsound, _libcsoundpath
 
     if install:
-        if sys.platform == 'linux':
-            _install_csound_linux()
-            return csoundDLL(install=False)
-        elif sys.platform == 'darwin':
-            _install_csound_macos()
-            return csoundDLL(install=False)
-        elif sys.platform.startswith('win'):
-            _install_csound_windows()
-            return csoundDLL(install=False)
+        try:
+            if sys.platform == 'linux':
+                _install_csound_linux()
+            elif sys.platform == 'darwin':
+                _install_csound_macos()
+            elif sys.platform.startswith('win'):
+                _install_csound_windows()
+        except ImportError:
+            raise
+        except (RuntimeError, OSError) as e:
+            raise ImportError(f"Automatic csound installation failed: {e}") from e
+        return csoundDLL(install=False)
 
     if sys.platform in ('linux', 'darwin'):
         raise ImportError("libcsound not found. It can be installed via:\n"
@@ -512,25 +531,74 @@ def _hexdigest(path: str) -> str:
     return hashsum.hexdigest()
 
 
-def _download(url: str, target: str, verbose=False) -> None:
+def _download(url: str, target: str, verbose=False, retries: int = 3) -> None:
+    import time
     import urllib.request
     import urllib.error
     import http.client
     import shutil
+    asset = os.path.basename(target)
     if verbose:
         print("Downloading URL:", url, "to", target)
     else:
-        logger.info("Downloading URL: %s to %s...", url, os.path.basename(target))
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "libcsound"})
-        with urllib.request.urlopen(req, timeout=120) as resp, \
-                open(target, "wb") as out:
-            shutil.copyfileobj(resp, out)
-    except (OSError, http.client.HTTPException, ValueError) as e:
-        # OSError covers urllib.error.URLError/HTTPError, socket and file errors;
-        # HTTPException covers BadStatusLine/IncompleteRead; ValueError covers
-        # malformed/unknown URLs.
-        raise RuntimeError(f"Failed to download {target} from {url}\n{e}") from e
+        logger.info("Downloading URL: %s to %s...", url, asset)
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "libcsound"})
+            with urllib.request.urlopen(req, timeout=120) as resp, \
+                    open(target, "wb") as out:
+                shutil.copyfileobj(resp, out)
+            return
+        except (OSError, http.client.HTTPException, ValueError) as e:
+            # OSError covers urllib.error.URLError/HTTPError, socket and file errors;
+            # HTTPException covers BadStatusLine/IncompleteRead; ValueError covers
+            # malformed/unknown URLs.
+            last_error = e
+            if attempt < retries:
+                wait = 2 * attempt
+                logger.warning("Download of '%s' failed (attempt %d/%d): %s. "
+                               "Retrying in %ds...",
+                               asset, attempt, retries, e, wait)
+                time.sleep(wait)
+    raise RuntimeError(f"Failed to download '{asset}' from {url} "
+                       f"(temporary file: {target}) after {retries} attempts\n"
+                       f"{last_error}") from last_error
+
+
+def _run_installer(cmd: Sequence[str], failure_hint: str = "") -> None:
+    """Run an installer command, streaming its output live while capturing it.
+
+    The child inherits stdin so interactive prompts keep working; stdout and
+    stderr are merged, printed as they arrive (so progress stays visible) and
+    retained for diagnostics.
+
+    Raises:
+        RuntimeError: if the command exits with a non-zero status. The error
+            includes the exit status, the full command, the tail of the
+            captured output and ``failure_hint``.
+    """
+    import subprocess
+    logger.info("Running bundled installer: %s", " ".join(str(c) for c in cmd))
+    proc = subprocess.Popen(list(cmd),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True, bufsize=1)
+    lines: list[str] = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        lines.append(line)
+        print(line, end="")
+    returncode = proc.wait()
+    if returncode != 0:
+        tail = "".join(lines[-50:]).rstrip() or "<no output captured>"
+        message = (f"Installer exited with status {returncode}\n"
+                   f"Command: {' '.join(str(c) for c in cmd)}\n"
+                   f"--- installer output (last {min(len(lines), 50)} lines) ---\n"
+                   f"{tail}")
+        if failure_hint:
+            message += f"\n{failure_hint}"
+        raise RuntimeError(message)
 
 
 def _install_csound_linux() -> None:
@@ -558,7 +626,6 @@ def _install_csound_linux() -> None:
     """
     import platform
     import stat
-    import subprocess
     import tempfile
     import zipfile
 
@@ -577,7 +644,13 @@ def _install_csound_linux() -> None:
 
     asset = os.getenv("CSOUND7_ASSET", f"csound7-linux-{arch}.zip")
     checksum_asset = f"{asset}.sha256"
-    base_url = f"https://github.com/{repo}/releases/download/{tag}"
+    if tag == 'latest':
+        # Notice how github changes the format to address the latest release
+        base_url = f"https://github.com/{repo}/releases/latest/download"
+    else:
+        # Here this is a real tag, it must exist
+        base_url = f"https://github.com/{repo}/releases/download/{tag}"
+    
     checksum_url = f"{base_url}/{checksum_asset}"
 
     with tempfile.TemporaryDirectory(prefix="libcsound-install-") as tmpdir:
@@ -607,11 +680,32 @@ def _install_csound_linux() -> None:
 
         extract_dir = os.path.join(tmpdir, "extracted")
         try:
+            zip_size = os.path.getsize(zip_path)
+        except OSError:
+            zip_size = -1
+        try:
             with zipfile.ZipFile(zip_path) as zf:
                 zf.extractall(extract_dir)
         except zipfile.BadZipFile as e:
             raise RuntimeError(
-                f"The downloaded archive '{asset}' is not a valid zip file: {e}"
+                f"The downloaded archive '{asset}' is not a valid zip file "
+                f"(size: {zip_size} bytes, temporary file: {zip_path}): {e}"
+            ) from e
+        except zipfile.LargeZipFile as e:
+            raise RuntimeError(
+                f"The downloaded archive '{asset}' requires 64-bit zip support "
+                f"(size: {zip_size} bytes, temporary file: {zip_path}): {e}"
+            ) from e
+        except NotImplementedError as e:
+            # Unsupported compression method.
+            raise RuntimeError(
+                f"The downloaded archive '{asset}' uses an unsupported "
+                f"compression method (temporary file: {zip_path}): {e}"
+            ) from e
+        except OSError as e:
+            raise RuntimeError(
+                f"Could not extract the downloaded archive '{asset}' "
+                f"(temporary file: {zip_path}, extract dir: {extract_dir}): {e}"
             ) from e
 
         # Locate the bundled installer
@@ -622,21 +716,23 @@ def _install_csound_linux() -> None:
         else:
             raise RuntimeError(f"install.sh was not found inside {asset}")
 
-        os.chmod(installer, os.stat(installer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        try:
+            os.chmod(installer, os.stat(installer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        except OSError as e:
+            raise RuntimeError(
+                f"Could not make the bundled installer executable: '{installer}' "
+                f"(from archive '{asset}'): {e}"
+            ) from e
 
-        # Run the bundled installer
+        # Run the bundled installer (output streams live and is captured, so a
+        # failure carries the installer log; see _run_installer)
         if sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty():
             # running inside a terminal: run interactively
-            logger.info("Running bundled installer: %s", installer)
-            result = subprocess.run([installer])
+            _run_installer([installer])
         else:
             # no terminal: install for the current user, answering yes to all
             # questions so that the installer does not block on any prompt
-            logger.info("Running bundled installer: %s --user -y", installer)
-            result = subprocess.run([installer, "--user", "-y"])
-
-        if result.returncode != 0:
-            raise RuntimeError(f"The bundled installer exited with status {result.returncode}")
+            _run_installer([installer, "--user", "-y"])
 
     # Make the freshly installed csound available to the current process
     home = Path.home()
@@ -686,7 +782,6 @@ def _install_csound_macos() -> None:
             if no csound installation could be located after running it.
     """
     import importlib.resources
-    import subprocess
 
     installer = importlib.resources.files(__package__).joinpath("data", "getcsound.sh")
     if not installer.is_file():
@@ -694,17 +789,12 @@ def _install_csound_macos() -> None:
 
     # as_file() yields a real filesystem path, extracting to a temporary file
     # first when the package is loaded from an archive (e.g. a zip).
+    macos_hint = ("The csound macOS .pkg is installed with sudo and needs an interactive "
+                  "terminal (or passwordless sudo).\n"
+                  "Alternatively, csound can be installed manually:\n"
+                  "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
     with importlib.resources.as_file(installer) as script:
-        logger.info("Running bundled installer: %s", script)
-        result = subprocess.run(["bash", str(script)])
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"The bundled installer exited with status {result.returncode}\n"
-            "The csound macOS .pkg is installed with sudo and needs an interactive "
-            "terminal (or passwordless sudo).\n"
-            "Alternatively, csound can be installed manually:\n"
-            "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash"
-        )
+        _run_installer(["bash", str(script)], failure_hint=macos_hint)
 
     # Make the freshly installed csound available to the current process
     csound_dir = Path("/Applications/Csound")
@@ -719,6 +809,28 @@ def _install_csound_macos() -> None:
 
     raise RuntimeError("csound 7 installation failed: "
                        "CsoundLib64 was not found in /Applications/Csound")
+
+
+def _windows_is_admin() -> bool:
+    """Return True if the current Windows session is elevated.
+
+    Returns False when the check cannot confirm elevation (including when the
+    check itself is unavailable), so callers fail with a helpful message
+    rather than assuming admin rights.
+    """
+    try:
+        return bool(ct.windll.shell32.IsUserAnAdmin())  # type: ignore[attr-defined]
+    except Exception as e:
+        logger.debug("Could not determine Windows elevation status: %s", e)
+        return False
+
+
+def _stdin_is_tty() -> bool:
+    """Return True if stdin is an interactive terminal."""
+    try:
+        return bool(sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty())
+    except Exception:
+        return False
 
 
 def _install_csound_windows() -> None:
@@ -747,8 +859,31 @@ def _install_csound_windows() -> None:
             located after running it.
     """
     import importlib.resources
+    import platform
     import shutil
-    import subprocess
+
+    machine = platform.machine().lower()
+    if machine in ("arm64", "aarch64"):
+        raise RuntimeError(
+            f"Windows on ARM64 (detected: '{platform.machine()}') is not supported "
+            "by the automatic csound installer, which provides an x86_64 package only.\n"
+            "Install csound manually (e.g. from https://github.com/csound/csound/releases) "
+            "and point LIBCSOUNDPATH at the installed csound64.dll."
+        )
+
+    if not _windows_is_admin():
+        if _stdin_is_tty():
+            logger.warning("The Csound Windows installer installs machine-wide and needs "
+                           "admin rights; the installer will request elevation (UAC prompt).")
+        else:
+            raise RuntimeError(
+                "The Csound Windows installer installs machine-wide and needs admin "
+                "rights, but the current session is not elevated and there is no "
+                "interactive terminal to show the UAC prompt.\n"
+                "Run from an interactive (or already elevated) PowerShell session, or "
+                "install csound manually:\n"
+                "    irm https://csound-plugins.github.io/getcsound.ps1 | iex"
+            )
 
     installer = importlib.resources.files(__package__).joinpath("data", "getcsound.ps1")
     if not installer.is_file():
@@ -764,19 +899,15 @@ def _install_csound_windows() -> None:
 
     # as_file() yields a real filesystem path, extracting to a temporary file
     # first when the package is loaded from an archive (e.g. a zip).
+    windows_hint = ("The Csound Windows installer installs machine-wide and needs "
+                    "admin rights: run it from an interactive (or elevated) "
+                    "PowerShell session.\n"
+                    "Alternatively, csound can be installed manually:\n"
+                    "    irm https://csound-plugins.github.io/getcsound.ps1 | iex")
     with importlib.resources.as_file(installer) as script:
-        logger.info("Running bundled installer: %s", script)
-        result = subprocess.run(
-            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)]
-        )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"The bundled installer exited with status {result.returncode}\n"
-            "The Csound Windows installer installs machine-wide and needs "
-            "admin rights: run it from an interactive (or elevated) "
-            "PowerShell session.\n"
-            "Alternatively, csound can be installed manually:\n"
-            "    irm https://csound-plugins.github.io/getcsound.ps1 | iex"
+        _run_installer(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+            failure_hint=windows_hint
         )
 
     # Make the freshly installed csound available to the current process

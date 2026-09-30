@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "libcsound"
-version = "0.17.7"
+dynamic = ["version"]
 description = "Python bindings to the Csound API, supporting all versions of csound higher or equal to 6.18, including csound 7"
 authors = [
     { name = "Eduardo Moguillansky", email = "eduardo.moguillansky@gmail.com" },
@@ -24,6 +24,14 @@ dependencies = ["numpy>=2.1"]
 
 [tool.setuptools]
 packages = ['libcsound']
+
+[tool.setuptools_scm]
+# Version is derived from git tags (see AGENTS.md). Releases are cut by
+# tagging: `git tag 0.17.8 && git push --tags`.
+# fallback_version only applies when building from a tree without git
+# metadata (e.g. a GitHub "Download ZIP" archive); sdists carry the frozen
+# version in PKG-INFO and are unaffected.
+fallback_version = "0.0.0"
 
 [tool.setuptools.package-data]
 libcsound = ["data/*.sh", "data/*.ps1"]

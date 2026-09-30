@@ -3172,8 +3172,8 @@ class PerformanceThread:
 
         .. rubric:: Example
 
-        Allocate an empty table, return the table number. This will block for at least the
-        duration of one performance cycle. The same code evaluated directly by
+        Allocate an empty table, return the table number. Without a callback this will block
+        for at least the duration of one performance cycle. The same code evaluated directly by
         :meth:`Csound.evalCode` might result in a much higher latency when csound
         is run using a performance thread
 

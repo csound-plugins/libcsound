@@ -13,6 +13,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Full history + tags: the package version is derived from git tags
+          # via setuptools-scm at build time.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v4
         with:
@@ -154,6 +158,26 @@ jobs:
           name: artifact-${{matrix.csound-branch }}-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index}}
           path: test/*.flac
 
+  installer-sync:
+    # The macOS/Windows auto-installers run bundled copies of the getcsound
+    # scripts; they must stay byte-identical to the upstream files served at
+    # https://csound-plugins.github.io/getcsound.{sh,ps1}.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Full history + tags: the package version is derived from git tags
+          # via setuptools-scm at build time.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.14"
+
+      - name: check bundled installers match upstream
+        run: |
+          python test/check-installer-sync.py
+
   linux-autoinstall:
     # Tests the automatic csound installation triggered on import when csound is
     # not present: _install_csound_linux downloads the latest csound 7 portable
@@ -167,6 +191,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Full history + tags: the package version is derived from git tags
+          # via setuptools-scm at build time.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v4
         with:
@@ -201,6 +229,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Full history + tags: the package version is derived from git tags
+          # via setuptools-scm at build time.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v4
         with:
@@ -247,6 +279,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Full history + tags: the package version is derived from git tags
+          # via setuptools-scm at build time.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v4
         with:
