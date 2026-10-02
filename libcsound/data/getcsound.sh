@@ -179,9 +179,14 @@ install_linux() {
     TAG="${CSOUND7_TAG:-latest}"
     ASSET="${CSOUND7_ASSET:-csound7-linux-${ARCH_SUFFIX}.zip}"
     CHECKSUM_ASSET="${ASSET}.sha256"
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
-    CHECKSUM_URL="https://github.com/${REPO}/releases/download/${TAG}/${CHECKSUM_ASSET}"
-
+    if [ "$TAG" = "latest" ]; then
+    	DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+        CHECKSUM_URL="https://github.com/${REPO}/releases/latest/download/${CHECKSUM_ASSET}"
+    else
+	    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
+	    CHECKSUM_URL="https://github.com/${REPO}/releases/download/${TAG}/${CHECKSUM_ASSET}"
+	fi
+	
     # ─── Prepare temporary directory ────────────────────────────────
     TMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TMP_DIR"' EXIT

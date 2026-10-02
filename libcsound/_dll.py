@@ -566,20 +566,46 @@ def _download(url: str, target: str, verbose=False, retries: int = 3) -> None:
                        f"{last_error}") from last_error
 
 
+def _stdin_is_tty() -> bool:
+    """Return True if stdin is an interactive terminal."""
+    try:
+        return bool(sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty())
+    except Exception:
+        return False
+
+
 def _run_installer(cmd: Sequence[str], failure_hint: str = "") -> None:
     """Run an installer command, streaming its output live while capturing it.
 
-    The child inherits stdin so interactive prompts keep working; stdout and
-    stderr are merged, printed as they arrive (so progress stays visible) and
-    retained for diagnostics.
+    When stdin is a terminal (interactive use) the child inherits stdio
+    directly so prompts are visible. Capturing via a pipe would hide
+    prompts printed without a trailing newline (e.g. ``read -p "…: "``,
+    as used by the Linux bundled ``install.sh``, or ``sudo``'s password
+    prompt): line-wise iteration only forwards complete lines, so the
+    question would never be shown while the installer blocks waiting
+    for the answer. Piping also makes the child's stdout fully buffered
+    instead of line-buffered, delaying progress output.
+
+    In non-interactive mode (no tty) stdout and stderr are merged,
+    printed as they arrive and retained for diagnostics.
 
     Raises:
         RuntimeError: if the command exits with a non-zero status. The error
             includes the exit status, the full command, the tail of the
-            captured output and ``failure_hint``.
+            captured output (non-interactive mode only) and ``failure_hint``.
     """
     import subprocess
     logger.info("Running bundled installer: %s", " ".join(str(c) for c in cmd))
+    if _stdin_is_tty():
+        # Interactive: inherit stdio so `read -p`/sudo prompts are visible.
+        returncode = subprocess.run(list(cmd)).returncode
+        if returncode != 0:
+            message = (f"Installer exited with status {returncode}\n"
+                       f"Command: {' '.join(str(c) for c in cmd)}")
+            if failure_hint:
+                message += f"\n{failure_hint}"
+            raise RuntimeError(message)
+        return
     proc = subprocess.Popen(list(cmd),
                             stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,
@@ -822,14 +848,6 @@ def _windows_is_admin() -> bool:
         return bool(ct.windll.shell32.IsUserAnAdmin())  # type: ignore[attr-defined]
     except Exception as e:
         logger.debug("Could not determine Windows elevation status: %s", e)
-        return False
-
-
-def _stdin_is_tty() -> bool:
-    """Return True if stdin is an interactive terminal."""
-    try:
-        return bool(sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty())
-    except Exception:
         return False
 
 
