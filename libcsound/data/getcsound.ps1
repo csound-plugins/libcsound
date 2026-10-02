@@ -157,7 +157,70 @@ function Write-ApiErrorHint {
 
 function Save-Url {
     param([string]$Url, [string]$Path)
-    Invoke-WebRequest -Uri $Url -OutFile $Path -UseBasicParsing
+    # Stream the download so a Write-Progress bar can be shown. This works on
+    # Windows PowerShell 5.1 as well as PowerShell 7+. When the server omits
+    # Content-Length, downloaded megabytes are shown without a percentage.
+    # Respects $ProgressPreference (SilentlyContinue hides the bar).
+    $activity = "Downloading $(Split-Path $Path -Leaf)"
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.AllowAutoRedirect = $true
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd('getcsound-installer')
+    # HttpClient.Timeout covers the whole request including the body, so the
+    # 100-second default could abort large downloads on slow connections.
+    $client.Timeout = [System.Threading.Timeout]::InfiniteTimeSpan
+    try {
+        $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        try {
+            $null = $response.EnsureSuccessStatusCode()
+            $totalBytes = $null
+            if ($null -ne $response.Content.Headers.ContentLength) {
+                $totalBytes = [long]$response.Content.Headers.ContentLength
+            }
+            $contentStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+            try {
+                $fileStream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                try {
+                    $buffer = New-Object byte[] 81920
+                    $totalRead = [long]0
+                    $lastPercent = -1
+                    $lastShown = [long]0
+                    while (($read = $contentStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                        $fileStream.Write($buffer, 0, $read)
+                        $totalRead += $read
+                        if ($totalBytes -gt 0) {
+                            $percent = [int](($totalRead * 100) / $totalBytes)
+                            if ($percent -ne $lastPercent) {
+                                $lastPercent = $percent
+                                Write-Progress -Activity $activity `
+                                    -Status ("{0:N1} MB of {1:N1} MB" -f ($totalRead / 1MB), ($totalBytes / 1MB)) `
+                                    -PercentComplete $percent
+                            }
+                        } elseif (($totalRead - $lastShown) -ge 1MB) {
+                            $lastShown = $totalRead
+                            Write-Progress -Activity $activity `
+                                -Status ("{0:N1} MB downloaded" -f ($totalRead / 1MB))
+                        }
+                    }
+                } finally {
+                    $fileStream.Dispose()
+                }
+            } finally {
+                $contentStream.Dispose()
+            }
+        } finally {
+            $response.Dispose()
+        }
+        Write-Progress -Activity $activity -Completed
+    } catch {
+        Write-Progress -Activity $activity -Completed
+        # Do not leave a truncated archive behind.
+        Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        throw
+    } finally {
+        $client.Dispose()
+        $handler.Dispose()
+    }
 }
 
 function Test-IsAdmin {

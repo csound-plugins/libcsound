@@ -116,6 +116,21 @@ github_api_get() {
     curl -fsSL -o "$out" "$url"
 }
 
+# download_file URL OUTFILE
+#
+# Download a large archive, showing a progress bar when stderr is a
+# terminal and staying silent otherwise (so CI logs stay clean).
+# Note: curl's -s (silent) suppresses --progress-bar, so the two
+# must not be combined.
+download_file() {
+    local url=$1 out=$2
+    if [[ -t 2 ]]; then
+        curl -fL --progress-bar -o "$out" "$url"
+    else
+        curl -fsSL -o "$out" "$url"
+    fi
+}
+
 # ═══════════════════════════════════════════════════════════════════
 # Csound 7 Portable Linux - One-line installer
 #
@@ -198,7 +213,7 @@ install_linux() {
     # ─── Download ───────────────────────────────────────────────────
     echo "Downloading ${ASSET}..."
     echo "URL: ${DOWNLOAD_URL}"
-    if ! curl -fsSL -o "$ZIP_FILE" "$DOWNLOAD_URL"; then
+    if ! download_file "$DOWNLOAD_URL" "$ZIP_FILE"; then
         error "Failed to download ${ASSET}"
         error "URL: ${DOWNLOAD_URL}"
         exit 1
@@ -435,7 +450,7 @@ install_macos() {
 
     verbose "Download URL: ${DOWNLOAD_URL}"
     echo "Downloading ${ARTIFACT_NAME}..."
-    if ! curl -fsSL -o "$ZIP_FILE" "$DOWNLOAD_URL"; then
+    if ! download_file "$DOWNLOAD_URL" "$ZIP_FILE"; then
         error "Failed to download ${ARTIFACT_NAME}"
         error "URL: ${DOWNLOAD_URL}"
         exit 1
