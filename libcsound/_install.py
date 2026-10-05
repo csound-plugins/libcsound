@@ -1,10 +1,18 @@
 from __future__ import annotations
 import ctypes as ct
 from pathlib import Path
+import sys
+import os
+from .common import logger
 from typing import Sequence
 
-from .common import logger
-from ._terminal import *
+
+def stdin_is_tty() -> bool:
+    """Return True if stdin is an interactive terminal."""
+    try:
+        return bool(sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty())
+    except Exception:
+        return False
 
 
 def run_installer(cmd: Sequence[str], failure_hint: str = "") -> None:
@@ -163,7 +171,7 @@ def install_csound_macos(quiet=True) -> None:
                   "terminal (or passwordless sudo).\n"
                   "Alternatively, csound can be installed manually:\n"
                   "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
-    args = ["bash", str(script)]
+    args = ["bash", str(installer)]
     if quiet:
         args.append("--quiet")
     with importlib.resources.as_file(installer) as script:
