@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Bootstrap installer for Csound 7 on Windows (x86_64).
+    Bootstrap installer for Csound 7 on Windows 11+ (x86_64).
 
 .DESCRIPTION
     Downloads the official Csound 7 Windows installer produced by the
@@ -83,7 +83,12 @@ while ($i -lt $args.Count) {
 
 # --verbose takes precedence if both --quiet and --verbose are given
 if ($VerboseOutput) { $Quiet = $false }
-if ($Quiet) { $ProgressPreference = 'SilentlyContinue' }
+
+# --- Retry policy --------------------------------------------------
+# Transient failures (dropped connections, brief GitHub or nightly.link
+# throttling) are retried a few times with a linearly increasing delay.
+$script:MaxAttempts = 3
+$script:RetryDelaySeconds = 2
 
 # --- Helpers -------------------------------------------------------
 function Show-Usage {
@@ -105,7 +110,8 @@ Arguments after -- are passed unchanged to the Inno Setup installer.
 
 This script resolves the latest successful csound_builds workflow run on the
 develop branch of csound/csound and installs the Windows x86_64 installer that
-the run produced. Windows on ARM64 is not supported yet.
+the run produced. Windows 11 or later (x86_64) is required; Windows on ARM64 is
+not supported yet.
 '@
 }
 
@@ -122,6 +128,27 @@ function Write-VerboseLine {
 function Write-Info {
     param([string]$Message)
     if (-not $Quiet) { Write-Host $Message }
+}
+
+function Invoke-WithRetry {
+    # Run a network action, retrying transient failures with a linearly
+    # increasing delay. The action's result is returned; the last failure is
+    # rethrown once the attempts are exhausted.
+    param(
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [string]$Description = 'request'
+    )
+    for ($attempt = 1; $attempt -le $script:MaxAttempts; $attempt++) {
+        try {
+            return & $Action
+        } catch {
+            if ($attempt -ge $script:MaxAttempts) { throw }
+            $delay = $script:RetryDelaySeconds * $attempt
+            Write-VerboseLine "$Description failed (attempt $attempt of $($script:MaxAttempts)): $($_.Exception.Message)"
+            Write-VerboseLine "Retrying in $delay second(s)..."
+            Start-Sleep -Seconds $delay
+        }
+    }
 }
 
 function Read-YesNo {
@@ -200,17 +227,20 @@ function Invoke-GitHubApi {
         'User-Agent' = 'getcsound-installer'
         'Accept'     = 'application/vnd.github+json'
     }
-    if ($script:Token) {
-        $authHeaders = $headers.Clone()
-        $authHeaders['Authorization'] = "Bearer $($script:Token)"
-        try {
-            return Invoke-RestMethod -Uri $Url -Headers $authHeaders -Method Get
-        } catch {
-            # The token may be invalid or expired; retry anonymously.
-            Write-VerboseLine 'Request with token failed; retrying anonymously...'
+    $request = {
+        if ($script:Token) {
+            $authHeaders = $headers.Clone()
+            $authHeaders['Authorization'] = "Bearer $($script:Token)"
+            try {
+                return Invoke-RestMethod -Uri $Url -Headers $authHeaders -Method Get
+            } catch {
+                # The token may be invalid or expired; retry anonymously.
+                Write-VerboseLine 'Request with token failed; retrying anonymously...'
+            }
         }
+        return Invoke-RestMethod -Uri $Url -Headers $headers -Method Get
     }
-    return Invoke-RestMethod -Uri $Url -Headers $headers -Method Get
+    return Invoke-WithRetry -Action $request -Description "GitHub API request to $Url"
 }
 
 function Write-ApiErrorHint {
@@ -221,69 +251,26 @@ function Write-ApiErrorHint {
 
 function Save-Url {
     param([string]$Url, [string]$Path)
-    # Stream the download so a Write-Progress bar can be shown. This works on
-    # Windows PowerShell 5.1 as well as PowerShell 7+. When the server omits
-    # Content-Length, downloaded megabytes are shown without a percentage.
-    # Respects $ProgressPreference (SilentlyContinue hides the bar).
-    $activity = "Downloading $(Split-Path $Path -Leaf)"
-    $handler = New-Object System.Net.Http.HttpClientHandler
-    $handler.AllowAutoRedirect = $true
-    $client = New-Object System.Net.Http.HttpClient($handler)
-    $client.DefaultRequestHeaders.UserAgent.ParseAdd('getcsound-installer')
-    # HttpClient.Timeout covers the whole request including the body, so the
-    # 100-second default could abort large downloads on slow connections.
-    $client.Timeout = [System.Threading.Timeout]::InfiniteTimeSpan
-    try {
-        $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
-        try {
-            $null = $response.EnsureSuccessStatusCode()
-            $totalBytes = $null
-            if ($null -ne $response.Content.Headers.ContentLength) {
-                $totalBytes = [long]$response.Content.Headers.ContentLength
-            }
-            $contentStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
-            try {
-                $fileStream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-                try {
-                    $buffer = New-Object byte[] 81920
-                    $totalRead = [long]0
-                    $lastPercent = -1
-                    $lastShown = [long]0
-                    while (($read = $contentStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-                        $fileStream.Write($buffer, 0, $read)
-                        $totalRead += $read
-                        if ($totalBytes -gt 0) {
-                            $percent = [int](($totalRead * 100) / $totalBytes)
-                            if ($percent -ne $lastPercent) {
-                                $lastPercent = $percent
-                                Write-Progress -Activity $activity `
-                                    -Status ("{0:N1} MB of {1:N1} MB" -f ($totalRead / 1MB), ($totalBytes / 1MB)) `
-                                    -PercentComplete $percent
-                            }
-                        } elseif (($totalRead - $lastShown) -ge 1MB) {
-                            $lastShown = $totalRead
-                            Write-Progress -Activity $activity `
-                                -Status ("{0:N1} MB downloaded" -f ($totalRead / 1MB))
-                        }
-                    }
-                } finally {
-                    $fileStream.Dispose()
-                }
-            } finally {
-                $contentStream.Dispose()
-            }
-        } finally {
-            $response.Dispose()
-        }
-        Write-Progress -Activity $activity -Completed
-    } catch {
-        Write-Progress -Activity $activity -Completed
+    # curl.exe ships with Windows 11 and later. -f makes HTTP errors fatal and
+    # -L follows the nightly.link / GitHub release redirects. Show curl's own
+    # progress meter only when stderr is an interactive console (never on CI,
+    # where output is piped) and not in --quiet mode; otherwise stay silent but
+    # still print errors (-sS).
+    $interactive = $false
+    try { $interactive = -not [Console]::IsErrorRedirected } catch { }
+    $curlArgs = @('-fL')
+    if ((-not $Quiet) -and $interactive) {
+        $curlArgs += '--progress-bar'
+    } else {
+        $curlArgs += '-sS'
+    }
+    $curlArgs += @('-o', $Path, '--', $Url)
+
+    & curl.exe @curlArgs
+    if ($LASTEXITCODE -ne 0) {
         # Do not leave a truncated archive behind.
         Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
-        throw
-    } finally {
-        $client.Dispose()
-        $handler.Dispose()
+        throw "curl.exe failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -314,6 +301,15 @@ switch ($PlatformArch) {
         Write-Err "Unsupported architecture: $PlatformArch. Only Windows x86_64 is supported."
         exit 1
     }
+}
+
+# --- Require curl.exe ----------------------------------------------
+# The archive is downloaded with curl.exe, which ships with Windows 11 and
+# later (and with Windows Server 2019 and later).
+if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) {
+    Write-Err 'curl.exe was not found, but is required to download Csound.'
+    Write-Err 'It is bundled with Windows 11 and later. Install curl and retry.'
+    exit 1
 }
 
 # --- Configuration -------------------------------------------------
@@ -457,7 +453,9 @@ try {
     Write-VerboseLine "Download URL: $DownloadUrl"
     Write-Info "Downloading $ArtifactName..."
     try {
-        Save-Url -Url $DownloadUrl -Path $ZipFile
+        Invoke-WithRetry -Description "Download of $ArtifactName" -Action {
+            Save-Url -Url $DownloadUrl -Path $ZipFile
+        }
     } catch {
         Write-Err "Failed to download $ArtifactName"
         Write-Err "URL: $DownloadUrl"

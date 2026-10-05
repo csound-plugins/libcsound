@@ -177,15 +177,30 @@ github_api_get() {
 #
 # Download a large archive, showing a progress bar when stderr is a
 # terminal and staying silent otherwise (so CI logs stay clean).
+# Transient failures (dropped connections, brief nightly.link throttling) are
+# retried a few times with a linearly increasing delay.
 # Note: curl's -s (silent) suppresses --progress-bar, so the two
 # must not be combined.
 download_file() {
     local url=$1 out=$2
-    if [[ -t 2 ]]; then
-        curl -fL --progress-bar -o "$out" "$url"
-    else
-        curl -fsSL -o "$out" "$url"
-    fi
+    local attempt delay
+    for ((attempt = 1; attempt <= 3; attempt++)); do
+        if [[ -t 2 ]]; then
+            if curl -fL --progress-bar -o "$out" "$url"; then
+                return 0
+            fi
+        else
+            if curl -fsSL -o "$out" "$url"; then
+                return 0
+            fi
+        fi
+        if ((attempt >= 3)); then
+            return 1
+        fi
+        delay=$((attempt * 2))
+        verbose "Download failed (attempt ${attempt}/3); retrying in ${delay}s..."
+        sleep "$delay"
+    done
 }
 
 # ─── Portable installer helpers ────────────────────────────────────
