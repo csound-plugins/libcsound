@@ -103,7 +103,7 @@ def defaultRealtimeModule() -> str:
     return 'pa_cb'
 
 
-def realtimeModulesForPlatform(platform='') -> set[str]:
+def realtimeModulesForPlatform(platform='') -> list[str]:
     """
     Returns a set of modules, does not check if they are actually available
 
@@ -125,13 +125,13 @@ def realtimeModulesForPlatform(platform='') -> set[str]:
     if not platform:
         platform = sys.platform
     if platform == 'linux':
-        return {'portaudio', 'jack', 'pulse', 'alsa'}
+        return ['portaudio', 'jack', 'alsa']
     elif platform == 'darwin':
-        return {'portaudio', 'auhal', 'jack'}
+        return ['portaudio', 'auhal', 'jack']
     elif platform == 'windows':
-        return {'portaudio', 'winmme'}
+        return ['portaudio', 'winmme']
     else:
-        return set()
+        return []
 
 
 def testCsound(module: str = '',
@@ -254,6 +254,9 @@ def splitCommandLine(args: str) -> list[str]:
 
 
 def waveplot(samples: np.ndarray, samplerate: int):
+    """
+    Plot samples as a waveform in matplotlib
+    """
     def sec2str(seconds):
         s = seconds % 60
         sfrac = str(round((s - int(s)), 3)).split(".")[1]
