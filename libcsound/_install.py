@@ -1,139 +1,10 @@
 from __future__ import annotations
 import ctypes as ct
-import hashlib
 from pathlib import Path
 from typing import Sequence
 
 from .common import logger
 from ._terminal import *
-
-
-def print_download_info(url: str, target: str) -> None:
-    """Print a compact, colored summary of an imminent download."""
-    stream = sys.stdout
-    asset = os.path.basename(target)
-    target_dir = os.path.dirname(target) or "."
-
-    title = paint(f"Downloading {asset}", "bold", "cyan", stream=stream)
-    rule_char = "─" if supports_color(stream) and supports_unicode(stream) else "-"
-    try:
-        width = os.get_terminal_size().columns
-    except Exception:
-        width = 80
-    rule = rule_char * max(0, width - 4)
-
-    print()
-    print(f"  {title}")
-    print(f"  {rule}")
-    for label, value, color in (
-        ("source:", url, "blue"),
-        ("target:", target_dir, "blue"),
-    ):
-        label_text = paint(f"{label:<8}", "bold", stream=stream)
-        value_text = paint(value, color, stream=stream)
-        print(f"  {label_text} {value_text}")
-    print()
-
-
-def hexdigest(path: str) -> str:
-    hashsum = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            hashsum.update(chunk)
-    return hashsum.hexdigest()
-
-
-def content_length(resp: Any) -> int | None:
-    try:
-        value = resp.headers.get("Content-Length")
-        if value is not None:
-            return int(value)
-    except (KeyError, TypeError, ValueError):
-        pass
-    return None
-
-
-def copy_with_progress(resp: Any, out: Any, asset: str) -> None:
-    """Copy ``resp`` to ``out``, rendering a progress bar on stderr."""
-    import time
-
-    stream = sys.stderr
-    tty = stream_is_tty(stream)
-    total = content_length(resp)
-    start = time.monotonic()
-    done = 0
-    last_render = 0.0
-    last_render_done = -1
-    interval = 0.1 if tty else 0.5
-    while True:
-        chunk = resp.read(65536)
-        if not chunk:
-            break
-        out.write(chunk)
-        done += len(chunk)
-        now = time.monotonic()
-        if now - last_render >= interval:
-            render_progress_line(stream, asset, done, total, now - start, tty)
-            last_render = now
-            last_render_done = done
-    if tty:
-        clear_progress_line(stream)
-        print_progress_done(stream, asset, done)
-    elif done != last_render_done:
-        render_progress_line(stream, asset, done, total,
-                             time.monotonic() - start, tty)
-
-
-def download(url: str, target: str, verbose: bool = False, retries: int = 3,
-             progress: bool = False) -> None:
-    """Download ``url`` and store it as ``target``.
-
-    Args:
-        url: Source URL.
-        target: Destination file path.
-        verbose: Print a human-readable summary of the download.
-        retries: Number of attempts before giving up.
-        progress: Show a progress bar while downloading (tty only).
-    """
-    import time
-    import urllib.request
-    import http.client
-    import shutil
-    asset = os.path.basename(target)
-    if verbose:
-        print_download_info(url, target)
-    else:
-        logger.info("Downloading URL: %s to %s...", url, asset)
-    last_error: Exception | None = None
-    for attempt in range(1, retries + 1):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "libcsound"})
-            with urllib.request.urlopen(req, timeout=120) as resp, \
-                    open(target, "wb") as out:
-                if progress:
-                    copy_with_progress(resp, out, asset)
-                else:
-                    shutil.copyfileobj(resp, out)
-            return
-        except (OSError, http.client.HTTPException, ValueError) as e:
-            # OSError covers urllib.error.URLError/HTTPError, socket and file errors;
-            # HTTPException covers BadStatusLine/IncompleteRead; ValueError covers
-            # malformed/unknown URLs.
-            last_error = e
-            if progress and stream_is_tty(sys.stderr):
-                try:
-                    clear_progress_line(sys.stderr)
-                except Exception:
-                    pass
-            if attempt < retries:
-                wait = 2 * attempt
-                logger.warning("Download of '%s' failed (attempt %d/%d): %s. "
-                               "Retrying in %ds...",
-                               asset, attempt, retries, e, wait)
-                time.sleep(wait)
-    raise RuntimeError(f"Failed to download '{asset}' from {url} "
-                       f"(temporary file: {target}) after {retries} attempts\n"
-                       f"{last_error}") from last_error
 
 
 def run_installer(cmd: Sequence[str], failure_hint: str = "") -> None:
@@ -189,18 +60,19 @@ def run_installer(cmd: Sequence[str], failure_hint: str = "") -> None:
         raise RuntimeError(message)
 
 
-def install_csound_linux() -> None:
-    """Install the latest csound 7 portable release for linux.
+def install_csound_linux(quiet=True) -> None:
+    """Install csound 7 on linux by running the bundled installer.
 
-    This mirrors the process of the one-line installer at
-    https://csound-plugins.github.io/getcsound.sh
+    This runs the bundled copy of the official installer at
+    https://csound-plugins.github.io/getcsound.sh with bash. The installer
+    downloads the portable csound 7 release from the
+    ``csound-plugins/csound-plugins`` GitHub repository, verifies its SHA-256
+    checksum and installs it. ``--no-risset`` is always passed so that risset is
+    never installed.
 
-    It downloads the release asset ``csound7-linux-<arch>.zip`` from the
-    ``csound-plugins/csound-plugins`` GitHub repository, verifies the
-    SHA-256 checksum, extracts it and runs the
-    bundled ``install.sh``. When running inside a tty the installer is run
-    interactively; otherwise it is run with ``--user -y`` so that csound is
-    installed to ``~/.local/csound``
+    When running inside a terminal the installer is run interactively;
+    otherwise it is run with ``--user -y`` so that csound is installed to
+    ``~/.local/csound`` without prompting.
 
     After a successful installation, the environment variables ``LIBCSOUNDPATH``
     and ``OPCODE7DIR64`` point to the installed library and plugin
@@ -208,120 +80,29 @@ def install_csound_linux() -> None:
     the need to open a new terminal.
 
     Raises:
-        RuntimeError: if the download or the checksum verification failed, if the
-            bundled ``install.sh`` could not be found or failed, or if csound
-            could not be located post installation.
+        RuntimeError: if the bundled installer could not be found or failed, or
+            if csound could not be located post installation.
     """
-    import platform
-    import stat
-    import tempfile
-    import zipfile
+    import importlib.resources
 
-    repo = "csound-plugins/csound-plugins"
-    tag = os.getenv("CSOUND7_TAG", "latest")
+    installer = importlib.resources.files(__package__).joinpath("data", "getcsound.sh")
+    if not installer.is_file():
+        raise RuntimeError(f"The bundled installer was not found: {installer}")
 
-    # Detect the CPU architecture
-    machine = platform.machine().lower()
-    if machine in ("x86_64", "amd64"):
-        arch = "x86_64"
-    elif machine in ("aarch64", "arm64"):
-        arch = "aarch64"
-    else:
-        raise RuntimeError(f"Unsupported architecture: {machine}. "
-                           "Supported architectures: x86_64, aarch64.")
-
-    asset = os.getenv("CSOUND7_ASSET", f"csound7-linux-{arch}.zip")
-    checksum_asset = f"{asset}.sha256"
-    if tag == 'latest':
-        # Notice how github changes the format to address the latest release
-        base_url = f"https://github.com/{repo}/releases/latest/download"
-    else:
-        # Here this is a real tag, it must exist
-        base_url = f"https://github.com/{repo}/releases/download/{tag}"
-    
-    checksum_url = f"{base_url}/{checksum_asset}"
-
-    with tempfile.TemporaryDirectory(prefix="libcsound-install-") as tmpdir:
-        zip_path = os.path.join(tmpdir, asset)
-        checksum_path = f"{zip_path}.sha256"
-        download(f"{base_url}/{asset}", zip_path, verbose=True,
-                 progress=stdin_is_tty())
-        download(checksum_url, checksum_path)
-
-        # Verify SHA256 checksum before extracting
-        try:
-            with open(checksum_path, encoding="utf-8") as f:
-                tokens = f.readline().split()
-        except (OSError, UnicodeDecodeError) as e:
-            raise RuntimeError(
-                f"Could not read the checksum file downloaded from {checksum_url}: {e}"
-            ) from e
-        expected = tokens[0] if tokens else ""
-        actual = hexdigest(zip_path)
-        if not expected or expected != actual:
-            raise RuntimeError(
-                f"SHA-256 checksum verification failed for {asset}\n"
-                f"Expected: {expected}\n"
-                f"Actual:   {actual}\n"
-                f"The downloaded file may be corrupted or have been modified.\n"
-                f"Checksum URL: {checksum_url}")
-        logger.info("Checksum verified.")
-
-        extract_dir = os.path.join(tmpdir, "extracted")
-        try:
-            zip_size = os.path.getsize(zip_path)
-        except OSError:
-            zip_size = -1
-        try:
-            with zipfile.ZipFile(zip_path) as zf:
-                zf.extractall(extract_dir)
-        except zipfile.BadZipFile as e:
-            raise RuntimeError(
-                f"The downloaded archive '{asset}' is not a valid zip file "
-                f"(size: {zip_size} bytes, temporary file: {zip_path}): {e}"
-            ) from e
-        except zipfile.LargeZipFile as e:
-            raise RuntimeError(
-                f"The downloaded archive '{asset}' requires 64-bit zip support "
-                f"(size: {zip_size} bytes, temporary file: {zip_path}): {e}"
-            ) from e
-        except NotImplementedError as e:
-            # Unsupported compression method.
-            raise RuntimeError(
-                f"The downloaded archive '{asset}' uses an unsupported "
-                f"compression method (temporary file: {zip_path}): {e}"
-            ) from e
-        except OSError as e:
-            raise RuntimeError(
-                f"Could not extract the downloaded archive '{asset}' "
-                f"(temporary file: {zip_path}, extract dir: {extract_dir}): {e}"
-            ) from e
-
-        # Locate the bundled installer
-        for root, _dirs, files in os.walk(extract_dir):
-            if "install.sh" in files:
-                installer = os.path.join(root, "install.sh")
-                break
-        else:
-            raise RuntimeError(f"install.sh was not found inside {asset}")
-
-        try:
-            os.chmod(installer, os.stat(installer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        except OSError as e:
-            raise RuntimeError(
-                f"Could not make the bundled installer executable: '{installer}' "
-                f"(from archive '{asset}'): {e}"
-            ) from e
-
-        # Run the bundled installer (output streams live and is captured, so a
-        # failure carries the installer log; see _run_installer)
-        if sys.stdin is not None and not sys.stdin.closed and sys.stdin.isatty():
-            # running inside a terminal: run interactively
-            run_installer([installer])
-        else:
-            # no terminal: install for the current user, answering yes to all
-            # questions so that the installer does not block on any prompt
-            run_installer([installer, "--user", "-y"])
+    # as_file() yields a real filesystem path, extracting to a temporary file
+    # first when the package is loaded from an archive (e.g. a zip).
+    linux_hint = ("csound can also be installed manually:\n"
+                  "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
+    with importlib.resources.as_file(installer) as script:
+        options = ["bash", str(script), "--no-risset"]
+        if not stdin_is_tty():
+            # No terminal (e.g. on CI): install for the current user and answer
+            # yes to any prompt, so that no password is needed and the installer
+            # does not block waiting for input.
+            options.extend(["--user", "-y"])
+        if quiet:
+            options.append("--quiet")
+        run_installer(options, failure_hint=linux_hint)
 
     # Make the freshly installed csound available to the current process
     home = Path.home()
@@ -346,7 +127,7 @@ def install_csound_linux() -> None:
                            "libcsound64.so was not found in any of the standard locations")
 
 
-def install_csound_macos() -> None:
+def install_csound_macos(quiet=True) -> None:
     """Install the latest csound 7 .pkg for macOS by running the bundled installer.
 
     The official Csound 7 macOS package is produced by the "csound_builds"
@@ -382,8 +163,11 @@ def install_csound_macos() -> None:
                   "terminal (or passwordless sudo).\n"
                   "Alternatively, csound can be installed manually:\n"
                   "    curl -fsSL https://csound-plugins.github.io/getcsound.sh | bash")
+    args = ["bash", str(script)]
+    if quiet:
+        args.append("--quiet")
     with importlib.resources.as_file(installer) as script:
-        run_installer(["bash", str(script)], failure_hint=macos_hint)
+        run_installer(args, failure_hint=macos_hint)
 
     # Make the freshly installed csound available to the current process
     csound_dir = Path("/Applications/Csound")

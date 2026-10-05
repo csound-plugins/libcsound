@@ -27,15 +27,21 @@
 .PARAMETER Help
     Show this help without downloading the installer. Also --help.
 
-.PARAMETER HelpAll
-    Show this help plus information about the bundled installer. Also --help-all.
-
 .PARAMETER Release
     Install the installer published with the latest GitHub release instead of
     the latest successful csound_builds workflow run. Also --release.
 
 .PARAMETER Verbose
     Show the download URLs and other diagnostic information. Also --verbose.
+
+.PARAMETER Quiet
+    Only print essential information. Also --quiet.
+
+.PARAMETER Yes
+    Non-interactive: do not prompt; install Csound and risset. Also -y.
+
+.PARAMETER NoRisset
+    Do not install risset and do not ask about it. Also --no-risset.
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -45,9 +51,11 @@ $ErrorActionPreference = 'Stop'
 # long options as the Unix getcsound.sh can be accepted, including the "--"
 # separator that forwards the remaining arguments to the bundled installer.
 $ShowHelp = $false
-$HelpAll = $false
 $UseRelease = $false
 $VerboseOutput = $false
+$Quiet = $false
+$AutoYes = $false
+$NoRisset = $false
 $InstallerArgs = New-Object System.Collections.Generic.List[string]
 
 $i = 0
@@ -55,9 +63,11 @@ while ($i -lt $args.Count) {
     $arg = [string]$args[$i]
     switch ($arg) {
         { $_ -in '--help', '-help', '-h', '/?' } { $ShowHelp = $true }
-        { $_ -in '--help-all', '-help-all' }     { $HelpAll = $true }
         { $_ -in '--release', '-release' }       { $UseRelease = $true }
         { $_ -in '--verbose', '-verbose' }       { $VerboseOutput = $true }
+        { $_ -in '--quiet', '-quiet' }           { $Quiet = $true }
+        { $_ -in '--no-risset', '-no-risset' }   { $NoRisset = $true }
+        { $_ -in '-y', '--yes', '-yes' }         { $AutoYes = $true }
         '--' {
             $i++
             while ($i -lt $args.Count) {
@@ -71,6 +81,10 @@ while ($i -lt $args.Count) {
     $i++
 }
 
+# --verbose takes precedence if both --quiet and --verbose are given
+if ($VerboseOutput) { $Quiet = $false }
+if ($Quiet) { $ProgressPreference = 'SilentlyContinue' }
+
 # --- Helpers -------------------------------------------------------
 function Show-Usage {
     @'
@@ -78,10 +92,14 @@ Usage: getcsound.ps1 [OPTIONS] [-- INSTALLER-OPTIONS]
 
 Options:
   --help       Show this help without downloading the installer.
-  --help-all   Show this help plus information about the bundled installer.
   --release    Install the installer published with the latest GitHub release
                instead of the latest successful csound_builds workflow run.
   --verbose    Show the download URLs and other diagnostic information.
+  --quiet      Only print essential information (warnings, errors, and a
+               final completion message).
+  --no-risset  Do not install risset and do not ask about it.
+  -y           Non-interactive: do not prompt; install Csound and risset.
+               Pass --no-risset to skip risset.
 
 Arguments after -- are passed unchanged to the Inno Setup installer.
 
@@ -99,6 +117,52 @@ function Write-Err {
 function Write-VerboseLine {
     param([string]$Message)
     if ($VerboseOutput) { Write-Host $Message }
+}
+
+function Write-Info {
+    param([string]$Message)
+    if (-not $Quiet) { Write-Host $Message }
+}
+
+function Read-YesNo {
+    param([string]$Prompt)
+    while ($true) {
+        $response = Read-Host "$Prompt [y/N]"
+        if ($response -match '^\s*[Yy]') { return $true }
+        if ($response -match '^\s*$' -or $response -match '^\s*[Nn]') { return $false }
+        Write-Host 'Please answer yes or no.'
+    }
+}
+
+function Install-Risset {
+    # risset is a python package, installed via uv (mirrors getcsound.sh).
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Write-Info 'uv is not installed, installing it first...'
+        try {
+            Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+        } catch {
+            Write-Err 'Failed to install uv.'
+            Write-Err $_.Exception.Message
+            return
+        }
+        # The installer places uv in %USERPROFILE%\.local\bin; make it available
+        # in this session.
+        $uvBin = Join-Path $env:USERPROFILE '.local\bin'
+        if (Test-Path -LiteralPath $uvBin) { $env:Path = "$uvBin;$env:Path" }
+        if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+            Write-Err 'uv installation failed.'
+            return
+        }
+        Write-Info "uv installed: $(& uv --version)"
+    }
+    Write-Info 'Installing risset...'
+    & uv tool install risset
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err 'risset installation failed. You can retry later with: uv tool install risset'
+        return
+    }
+    Write-Info 'risset installed. Run ''risset --help'' to get started.'
+    Write-Info 'To uninstall risset later: uv tool uninstall risset'
 }
 
 function Get-PlatformArch {
@@ -229,18 +293,9 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# --- Handle --help / --help-all ------------------------------------
+# --- Handle --help -------------------------------------------------
 if ($ShowHelp) {
     Show-Usage
-    exit 0
-}
-
-if ($HelpAll) {
-    Show-Usage
-    Write-Host ''
-    Write-Host 'The Windows Csound installer is a GUI setup program; it has no'
-    Write-Host 'bundled textual help to display. Standard Inno Setup switches'
-    Write-Host '(for example /VERYSILENT, /SUPPRESSMSGBOXES) are passed through.'
     exit 0
 }
 
@@ -312,10 +367,10 @@ try {
         $ReleaseTag = if ($env:CSOUND7_RELEASE_TAG) { $env:CSOUND7_RELEASE_TAG } else { 'latest' }
         if ($ReleaseTag -eq 'latest') {
             $releaseUrl = "https://api.github.com/repos/$Repo/releases/latest"
-            Write-Host "Looking for the latest release of ${Repo}..."
+            Write-Info "Looking for the latest release of ${Repo}..."
         } else {
             $releaseUrl = "https://api.github.com/repos/$Repo/releases/tags/$ReleaseTag"
-            Write-Host "Looking for release $ReleaseTag of ${Repo}..."
+            Write-Info "Looking for release $ReleaseTag of ${Repo}..."
         }
         Write-VerboseLine "Release URL: $releaseUrl"
         try {
@@ -333,14 +388,14 @@ try {
             Write-Err "URL: $releaseUrl"
             exit 1
         }
-        Write-Host "Using release: $ReleaseTag"
+        Write-Info "Using release: $ReleaseTag"
         $ArtifactName = "csound-windows-$ReleaseTag.zip"
         $DownloadUrl = "https://github.com/$Repo/releases/download/$ReleaseTag/$ArtifactName"
     } else {
         # --- Resolve the latest successful workflow run ------------
         $RunId = $env:CSOUND7_WINDOWS_RUN_ID
         if (-not $RunId) {
-            Write-Host "Looking for the latest successful $Workflow run on branch '$Branch' of ${Repo}..."
+            Write-Info "Looking for the latest successful $Workflow run on branch '$Branch' of ${Repo}..."
             $runsUrl = "https://api.github.com/repos/$Repo/actions/workflows/$Workflow/runs?branch=$Branch&event=push&per_page=30"
             Write-VerboseLine "Runs URL: $runsUrl"
             try {
@@ -360,7 +415,7 @@ try {
             }
             $RunId = $run.id
         }
-        Write-Host "Using workflow run: $RunId"
+        Write-Info "Using workflow run: $RunId"
 
         # --- Resolve the matching artifact -------------------------
         $ArtifactName = $env:CSOUND7_WINDOWS_ARTIFACT
@@ -385,7 +440,7 @@ try {
             }
             $ArtifactName = $artifact.name
         }
-        Write-Host "Using artifact: $ArtifactName"
+        Write-Info "Using artifact: $ArtifactName"
 
         # --- Download via nightly.link -----------------------------
         # GitHub Actions artifacts cannot be downloaded anonymously, so the
@@ -400,7 +455,7 @@ try {
     #     bytes as produced by the workflow run; release assets come straight
     #     from the GitHub release.
     Write-VerboseLine "Download URL: $DownloadUrl"
-    Write-Host "Downloading $ArtifactName..."
+    Write-Info "Downloading $ArtifactName..."
     try {
         Save-Url -Url $DownloadUrl -Path $ZipFile
     } catch {
@@ -409,12 +464,12 @@ try {
         Write-Err $_.Exception.Message
         exit 1
     }
-    Write-Host "Download complete: $ZipFile"
+    Write-Info "Download complete: $ZipFile"
 
     # --- Extract ---------------------------------------------------
     $ExtractDir = Join-Path $TmpDir 'extracted'
     New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
-    Write-Host "Extracting $ArtifactName..."
+    Write-Info "Extracting $ArtifactName..."
     try {
         # -LiteralPath is not available in Windows PowerShell 5.1.
         Expand-Archive -Path $ZipFile -DestinationPath $ExtractDir -Force
@@ -431,7 +486,7 @@ try {
         Write-Err "No Windows installer ($ExeGlob) was found inside $ArtifactName"
         exit 1
     }
-    Write-Host "Installer: $($Installer.Name)"
+    Write-Info "Installer: $($Installer.Name)"
 
     # --- Install ---------------------------------------------------
     # The Inno Setup package installs machine-wide, so run it elevated. When
@@ -439,7 +494,7 @@ try {
     $InstallerSwitches = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=modifypath')
     foreach ($extra in $InstallerArgs) { $InstallerSwitches += $extra }
 
-    Write-Host 'Installing Csound (a UAC prompt may appear)...'
+    Write-Info 'Installing Csound (a UAC prompt may appear)...'
     $startParams = @{
         FilePath     = $Installer.FullName
         ArgumentList = $InstallerSwitches
@@ -463,14 +518,30 @@ try {
         exit 1
     }
 
-    Write-Host 'Csound installed successfully.'
+    Write-Info 'Csound installed successfully.'
 
     $ProgramFiles = if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }
     $CsoundExe = Join-Path $ProgramFiles 'Csound7\bin\csound.exe'
     if (Test-Path -LiteralPath $CsoundExe) {
-        Write-Host "Binary: $CsoundExe"
+        Write-Info "Binary: $CsoundExe"
     } else {
         Write-Host "Note: $CsoundExe was not found; a custom install directory may have been used."
+    }
+
+    # --- Optional: install risset ----------------------------------
+    if (-not $Quiet) { Write-Host '' }
+    if (Get-Command risset -ErrorAction SilentlyContinue) {
+        Write-Info 'risset is already available; skipping installation.'
+    } elseif ($NoRisset) {
+        Write-VerboseLine 'Skipping risset installation (--no-risset).'
+    } elseif ($AutoYes) {
+        Install-Risset
+    } elseif (Read-YesNo 'Install risset (csound package manager)?') {
+        Install-Risset
+    }
+
+    if ($Quiet) {
+        Write-Host 'Csound 7 installed successfully.'
     }
 } finally {
     Remove-Item -LiteralPath $TmpDir -Recurse -Force -ErrorAction SilentlyContinue

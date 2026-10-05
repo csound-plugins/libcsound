@@ -139,10 +139,11 @@ def testCsound(module: str = '',
                ksmps=64,
                outdev='',
                nchnls=2,
-               dur=10.,
+               dur=4.,
                signal='pinker() * 0.2',
                opcodeDir='',
-               options: list[str] | None = None
+               options: list[str] | None = None,
+
     ) -> None:
     """
     Test csound
@@ -156,29 +157,32 @@ def testCsound(module: str = '',
         nchnls: number of output channels
         signal: which signal to use. Any valid sound-generating csound code
     """
-    from . import Csound
+    from . import Csound, getSystemSr
     csound = Csound(opcodeDir=opcodeDir)
+    if not module:
+        module = defaultRealtimeModule()
+    csound.setOption(f'-+rtaudio={module}')
+    if options is None:
+        options = []
 
-    if outdev:
-        if module:
-            csound.setOption(f'-+rtaudio={module}')
-        csound.setOption(f'-o{outdev}')
-    else:
-        if not module:
-            module = defaultRealtimeModule()
-        csound.setOption(f'-+rtaudio={module}')
+    if not outdev:
         if module == 'jack':
-            csound.setOption('-odac:_')
+            outdev = 'dac:_'
         else:
-            csound.setOption('-odac')
+            outdev = 'dac'
+    csound.setOption(f'-o{outdev}')
 
     if sr <= 0:
-        csound.setOption('--use-system-sr')
-    else:
-        csound.setOption(f'--sample-rate={sr}')
-    if options:
-        for opt in options:
-            csound.setOption(opt)
+        sr, _ = getSystemSr(module=module)
+        # csound.setOption('--use-system-sr')
+    csound.setOption(f'--sample-rate={sr}')
+    if module == 'jack':
+        if not any(option.startswith("-B") for option in options):
+            options.append("-B2048")
+            options.append("-b1024")
+
+    for opt in options:
+        csound.setOption(opt)
 
     csound.compileOrc(fr"""
     0dbfs = 1
@@ -200,8 +204,19 @@ def testCsound(module: str = '',
     pt = csound.performanceThread()
     pt.play()
     pt.scoreEvent(False, "i", [1, 0, dur])
-    setupSigint(lambda: (pt.stop()))
-    input("\n>>> Press any key to stop <<< \n")
+    running = True
+
+    def _sigint(*args, **kws):
+        nonlocal running
+        pt.stop()
+        restoreSigint()
+        running = False
+
+    setupSigint(_sigint)
+    import time
+    while running and dur > 0:
+        time.sleep(0.1)
+        dur -= 0.1
     restoreSigint()
     pt.stop()
     csound.stop()
