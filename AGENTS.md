@@ -1,5 +1,10 @@
 # Agent notes
 
+## Csound version support
+
+`libcsound` supports Csound 7 and later only. Csound 6 support has been removed;
+do not add version-specific API dispatch or Csound 6 compatibility layers.
+
 ## Releases are tag-driven (setuptools-scm)
 
 The package version is derived from git tags at build time

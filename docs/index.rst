@@ -8,8 +8,7 @@ libcsound
 
 Python bindings for csound
 
-This package can be used with any version of csound >= 6.18.
-**csound 7 is explicitly supported**.
+This package requires Csound >= 7.0.
 
 
 ------------
@@ -19,7 +18,5 @@ This package can be used with any version of csound >= 6.18.
     :maxdepth: 2
 
     introduction
-    csound6
     csound7
-    porting
     notebooks

@@ -163,8 +163,6 @@ def testCsound(module: str = '',
     if not module:
         module = defaultRealtimeModule()
     csound.setOption(f'-+rtaudio={module}')
-    if options is None:
-        options = []
 
     if not outdev:
         if module == 'jack':
@@ -178,8 +176,8 @@ def testCsound(module: str = '',
     csound.setOption(f'--sample-rate={sr}')
     if module == 'jack':
         if not any(option.startswith("-B") for option in options):
-            options.append("-B2048")
-            options.append("-b1024")
+            csound.setOption("-B2048")
+            csound.setOption("-b1024")
 
     for opt in options:
         csound.setOption(opt)
@@ -221,7 +219,8 @@ def testCsound(module: str = '',
         dur -= 0.1
     restoreSigint()
     pt.stop()
-    csound.stop()
+    pt.join()
+    csound.destroy()
 
 
 def castarray(ptr: ctypes._Pointer | ctypes.c_void_p, shape: tuple[int, ...]) -> np.ndarray:

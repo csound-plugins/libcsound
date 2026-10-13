@@ -9,9 +9,8 @@ Quick Start
 .. note::
 
     Csound does not need to be installed manually: if it cannot be found it is
-    installed automatically on import (see `installation`_). Any version >= 6.18
-    can be used. **csound 7** is explicitly supported and is the recommended
-    version to use.
+    installed automatically on import (see `installation`_). This package requires
+    **Csound 7 or later**.
 
 
 Rendering in real-time
@@ -65,8 +64,10 @@ The following example shows how to make csound generate audio in real-time.
     # remains active even if python is blocked doing something else.
     input("Press any key to stop...\n")
 
-    # Stop performance
-    csound.stop()
+    # Stop the performance and release the Csound instance
+    thread.stop()
+    thread.join()
+    csound.destroy()
 
 
 Render offline
@@ -103,15 +104,18 @@ The same code can be run offline (non-realtime mode)
 
     ''')
 
+    csound.start()
+
     # Schedule an instance of instr 1 for 10 seconds
-    csound.scoreEvent("i", [1, 0, 10])
+    csound.event("i", [1, 0, 10])
 
     # End rendering at 10 seconds. Without this the main
     # loop keeps rendering silence indefinitely
     csound.setEndMarker(10)
 
     # Perform until the end of the score
-    csound.perform()
+    while not csound.performKsmps():
+        pass
 
 
 --------------------------
@@ -182,26 +186,3 @@ so the variables below must be set **before** importing ``libcsound``.
     Path to user plugins. Set it to an empty string to disable searching for
     user-installed plugins. This can be needed when using a portable version of
     csound, where user plugins might be compiled for a different version.
-
-
--------------------------
-
-Compatibility
--------------
-
-``libcsound`` supports both **csound 6** and **csound 7** and provides a compatibility layer
-so that **the same code can be used for any version of csound**. In csound 7 some functions
-have been removed; these are clearly marked in the documentation. In the csound 6 API
-they are still available but marked as deprecated, with a pointer to a portable alternative so you can write
-future-proof code.
-
-
-.. note::
-    csound 7 is the best supported version at the moment and should be preferred over csound 6.
-
-
-When ``libcsound`` is imported, it queries the installed csound and loads the matching API. Each version has its own
-reference page, so you can see exactly which methods changed and how to write code that is portable across
-versions.
-
-For more information, see :ref:`portability`

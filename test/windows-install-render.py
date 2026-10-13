@@ -86,8 +86,8 @@ endin
         sys.exit(2)
 
     cs.start()
-    cs.scoreEvent('i', [1, 0, 1])
-    cs.scoreEvent('e', [0, 1.1])
+    cs.event('i', [1, 0, 1])
+    cs.event('e', [0, 1.1])
 
     while cs.performKsmps() == libcsound.CSOUND_SUCCESS:
         print(".", end="", flush=True)

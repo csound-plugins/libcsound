@@ -4,9 +4,7 @@
 csound API, version 7
 =====================
 
-This API applies to csound >= 7.0. The correct API is imported automatically based on the installed csound
-version. The csound 6 and csound 7 APIs are currently compatible for the most part, but they are expected to
-diverge as csound 7 evolves.
+This API applies to Csound >= 7.0 and is the API exposed by ``libcsound``.
 
 
 .. note::

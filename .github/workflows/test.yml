@@ -8,7 +8,7 @@ jobs:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         python-version: ["3.11", "3.14"]
         install-method: ["git"]
-        csound-branch: ["csound6", "develop"]
+        csound-branch: ["develop"]
       fail-fast: false
 
     steps:
@@ -21,12 +21,6 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: linux setup csound6
-        if: runner.os == 'linux' && matrix.csound-branch == 'csound6'
-        run: |
-          sudo apt-get update && sudo apt-get install csound libcsnd-dev
-          csound --version
 
       - name: linux setup csound 7
         if: runner.os == 'linux' && matrix.csound-branch == 'develop'
@@ -45,17 +39,6 @@ jobs:
           csound --version
           strace -f -t -e trace=file csound -+rtaudio=dummy --devices=out | grep "\.so" || echo ok
 
-      - name: macos - install csound 6
-        if: runner.os == 'macOS' && matrix.csound-branch == 'csound6'
-        run: |
-          curl -L -o csound6.18.dmg https://github.com/csound/csound/releases/download/6.18.1/Csound-MacOS-universal-6.18.1.dmg
-          brew install p7zip
-          7z x csound6.18.dmg
-          cd Csound-universal-6.18.1
-          sudo installer -pkg csound-MacOS-universal-6.18.1.pkg -target /
-          csound --version
-          cd ..
-
       - name: macos setup csound 7
         if: runner.os == 'macOS' && matrix.csound-branch == 'develop'
         run: |
@@ -67,21 +50,6 @@ jobs:
           cmake --build build --config Release
           sudo cmake --install build
           csound --version
-
-      - name: windows setup csound 6
-        if: runner.os == 'windows' && matrix.csound-branch == 'csound6'
-        run: |
-          curl -L -o csound-binaries.zip https://github.com/csound/csound/releases/download/6.18.1/Csound-6.18.1-windows-x64-binaries.zip
-          Expand-Archive csound-binaries.zip -DestinationPath "C:/Program Files/csound-binaries"
-          ls -r "C:/Program Files/csound-binaries"
-
-          "C:/Program Files/csound-binaries/build/Release" | Out-File -FilePath $env:GITHUB_PATH -Append
-          [Environment]::SetEnvironmentVariable("PATH", $Env:PATH + ";C:/Program Files/csound-binaries/build/Release", [EnvironmentVariableTarget]::Machine)
-          $Env:Path = $Env:Path + ";C:/Program Files/csound-binaries/build/Release"
-          echo "$PATH"
-
-          # Write-Output $Env:PATH
-          csound.exe --version
 
       # via https://learn.microsoft.com/en-us/vcpkg/consume/binary-caching-github-actions-cache
       - name: Export GitHub Actions cache environment variables
@@ -151,11 +119,11 @@ jobs:
       - name: test
         run: |
           cd test
-          python actions-test1.py -o actions-test1-${{ runner.os }}-py${{ matrix.python-version }}-${{ matrix.csound-branch }}.flac
+          python actions-test1.py -o actions-test1-${{ runner.os }}-py${{ matrix.python-version }}.flac
 
       - uses: actions/upload-artifact@v4
         with:
-          name: artifact-${{matrix.csound-branch }}-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index}}
+          name: artifact-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index }}
           path: test/*.flac
 
   installer-sync:

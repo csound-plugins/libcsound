@@ -49,8 +49,8 @@ endin
 print("Duration: ", args.dur)
 
 cs.start()
-cs.scoreEvent('i', [1, 0, args.dur])
-cs.scoreEvent('e', [0, args.dur+0.01])
+cs.event('i', [1, 0, args.dur])
+cs.event('e', [0, args.dur+0.01])
 
 counter = 0
 while cs.performKsmps() == libcsound.CSOUND_SUCCESS:

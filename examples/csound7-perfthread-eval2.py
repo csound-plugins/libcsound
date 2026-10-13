@@ -2,8 +2,6 @@ import libcsound
 import time
 import queue
 
-assert libcsound.VERSION >= 7000
-
 cs = libcsound.Csound()
 cs.setOption('-odac')
 cs.compileOrc(r'''
@@ -32,4 +30,3 @@ time.sleep(0.1)
 
 givalue = thread.evalCode("return givalue")
 print(givalue)
-

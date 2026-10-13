@@ -1,7 +1,6 @@
 #   libcsound
 #
-#   fork of ctcsound.py, made to be pip installable and support any
-#   version of csound 6 and csound 7
+#   fork of ctcsound.py, made to be pip installable and support csound 7
 #
 #   Copyright (C) 2024 Eduardo Moguillansky
 #
@@ -77,24 +76,24 @@ if not common.BUILDING_DOCS:
     from . import _dll
     libcsound, libcsoundPath = _dll.csoundDLL()
     VERSION = libcsound.csoundGetVersion()
-    if VERSION >= 7000:
-        APIVERSION = VERSION
-    else:
-        APIVERSION = libcsound.csoundGetAPIVersion()
+    if VERSION < 7000:
+        version = f"{VERSION // 1000}.{(VERSION % 1000) // 10}.{VERSION % 10}"
+        raise ImportError(
+            f"Csound 6 is no longer supported by libcsound (found Csound {version} "
+            f"at {libcsoundPath}). Install Csound 7 or later."
+        )
+    APIVERSION = VERSION
 
     # Temporary workaround: the official macOS build of csound does not search
     # its default user plugin directory, so point CS_USER_PLUGINDIR at it.
     _dll._ensure_user_plugins_dir(VERSION)
 
-    if VERSION < 7000:
-        from .api6 import *
-    else:
-        from .api7 import *
+    from .api7 import *
 else:
     print("------------- Building documentation -------------")
     VERSION = 0
+    APIVERSION = VERSION
     from . import api7
-    from . import api6
 
 
 

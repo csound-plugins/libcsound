@@ -5,8 +5,7 @@ libcsound
 
 Python bindings for Csound (fork of ``ctcsound``)
 
-These bindings can be used with any version of csound >= 6.18. Csound 7 is explicitely supported 
-and is the recommended version.
+These bindings require Csound 7 or later.
 
 
 Installation
@@ -98,6 +97,8 @@ Rendering in real-time using a render thread
     thread.scoreEvent(0, "i", [1, 0, 10])
     input("Press any key to stop...\n")
     thread.stop()
+    thread.join()
+    csound.destroy()
 
 
 Render offline
@@ -128,7 +129,7 @@ Render offline
 
     ''')
     csound.start()
-    csound.scoreEvent("i", [1, 0, 10])
+    csound.event("i", [1, 0, 10])
     csound.setEndMarker(10)
     # Perform until the end of the score
     while not csound.performKsmps():

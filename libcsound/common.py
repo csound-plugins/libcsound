@@ -123,24 +123,6 @@ class ChannelInfo:
         return bool(self.mode & CSOUND_INPUT_CHANNEL)
 
 
-class CsoundRandMTState(ct.Structure):
-    _fields_ = [("mti", ct.c_int),
-                ("mt", ct.c_uint32*624)]
-
-
-# PVSDATEXT is a variation on PVSDAT used in the pvs bus interface
-class PvsdatExt(ct.Structure):
-    _fields_ = [("N", ct.c_int32),
-                ("sliding", ct.c_int),      # Flag to indicate sliding case
-                ("NB", ct.c_int32),
-                ("overlap", ct.c_int32),
-                ("winsize", ct.c_int32),
-                ("wintype", ct.c_int),
-                ("format", ct.c_int32),
-                ("framecount", ct.c_uint32),
-                ("frame", ct.POINTER(ct.c_float))]
-
-
 # This structure holds the parameter hints for control channels
 class ControlChannelHints(ct.Structure):
     _fields_ = [("behav", ct.c_int),
@@ -174,16 +156,6 @@ class Windat(ct.Structure):
                 ("oabsmax", MYFLT),             # Y axis scaling factor
                 ("danflag", ct.c_int),             # set to 1 for extra Yaxis mid span
                 ("absflag", ct.c_int)]             # set to 1 to skip abs check
-
-
-class NamedGen(ct.Structure):
-    pass
-
-
-NamedGen._fields_ = [
-    ("name", ct.c_char_p),
-    ("genum", ct.c_int),
-    ("next", ct.POINTER(NamedGen))]
 
 
 class RtClock(ct.Structure):
