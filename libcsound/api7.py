@@ -2887,20 +2887,18 @@ class Csound:
 
         Multiple opcodes with the same name can exist if they have distinct signatures
 
+        .. note:: plugins are only loaded after .start() has been called, so if this
+            is called before, only builtin opcodes will be returned
+
         Returns:
             a list of :class:`OpcodeDef` (a dataclass with fields 'name',
             'outtypes', 'intypes', 'flags', and 'size')
         """
+        if not self._started:
+            logger.debug("Getting opcodes without having called .start(). Only "
+                         "builtin-opcodes will be returned, since plugin modules "
+                         "are not yet loaded")
         factory = self.ugenFactory()
-        """
-        result.append({
-                'opname': pstring(entry.opname) if entry.opname else '',
-                'outypes': pstring(entry.outypes) if entry.outypes else '',
-                'intypes': pstring(entry.intypes) if entry.intypes else '',
-                'dsblksiz': entry.dsblksiz,
-                'flags': entry.flags,
-            })
-        """
         opcodes = [OpcodeDef(name=opc['opname'], outtypes=opc['outypes'], intypes=opc['intypes'], flags=opc['flags'], size=opc['dsblksiz'])
                    for opc in factory.listOpcodes()]
         return opcodes

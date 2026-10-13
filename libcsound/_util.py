@@ -4,6 +4,7 @@ import signal
 import ctypes
 import numpy as np
 import sys
+from typing import Sequence
 
 from .common import (MYFLT,
                      CSOUND_CONTROL_CHANNEL,
@@ -142,7 +143,7 @@ def testCsound(module: str = '',
                dur=4.,
                signal='pinker() * 0.2',
                opcodeDir='',
-               options: list[str] | None = None,
+               options: Sequence[str] = (),
 
     ) -> None:
     """
@@ -174,7 +175,6 @@ def testCsound(module: str = '',
 
     if sr <= 0:
         sr, _ = getSystemSr(module=module)
-        # csound.setOption('--use-system-sr')
     csound.setOption(f'--sample-rate={sr}')
     if module == 'jack':
         if not any(option.startswith("-B") for option in options):
@@ -191,18 +191,21 @@ def testCsound(module: str = '',
 
     instr 1
       kchan init -1
-      kchan = (kchan + metro:k(1)) % nchnls
-      if changed:k(kchan) == 1 then
+      kchan = (kchan + metro:k(1)) % nchnls   
+      if eventcycles() == 0 || changed:k(kchan) == 1 then
         println "Channel: %d", kchan + 1
       endif
       asig = {signal}
       outch kchan + 1, asig
     endin
     """)
+    import time
 
     csound.start()
+
     pt = csound.performanceThread()
     pt.play()
+    time.sleep(0.1)
     pt.scoreEvent(False, "i", [1, 0, dur])
     running = True
 
@@ -213,7 +216,6 @@ def testCsound(module: str = '',
         running = False
 
     setupSigint(_sigint)
-    import time
     while running and dur > 0:
         time.sleep(0.1)
         dur -= 0.1
